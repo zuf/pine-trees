@@ -2,11 +2,12 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"html/template"
 	"io"
-	"io/ioutil"
 	"log"
+	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -14,6 +15,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/karlseguin/ccache"
 
 	"github.com/zuf/pine-trees/raw"
 
@@ -32,6 +35,8 @@ import (
 
 // TODO: remove global var
 var t time.Time
+var thumbnailsCache *ccache.Cache
+var filesListCache *ccache.Cache
 
 func printStats(count int, startedAt time.Time) {
 	if time.Since(t) > 5*time.Second {
@@ -105,13 +110,24 @@ type Photo struct {
 	SendToBrowser   bool
 }
 
+type PageNumber struct {
+	Num     int
+	Current bool
+}
+
+type BreadCrumb struct {
+	Title string
+	Path  string
+}
+
 type PhotosPageData struct {
-	Photos  []Photo
-	Page    int
-	MaxPage int
-	Pages   []int
-	Path    string
-	DirPath string
+	Photos      []Photo
+	Page        int
+	MaxPage     int
+	Pages       []PageNumber
+	Path        string
+	DirPath     string
+	BreadCrumbs []BreadCrumb
 }
 
 func basePath() string {
@@ -132,69 +148,116 @@ func fullPath(path string) string {
 
 func Index(c echo.Context) error {
 	path := c.QueryParam("s")
-	data := PhotosPageData{Photos: []Photo{}}
-
-	// TODO: use reader
-	files, err := ioutil.ReadDir(fullPath(path))
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	sort.SliceStable(files, func(i, j int) bool {
-		if files[i].IsDir() {
-			if files[j].IsDir() {
-				return files[i].Name() < files[j].Name()
-			} else {
-				return true
-			}
-		} else {
-			if files[j].IsDir() {
-				return false
-			} else {
-				return files[i].Name() < files[j].Name()
-			}
-		}
-	})
-
 	page := 1
 	page, _ = strconv.Atoi(c.QueryParam("p"))
-	if page < 1 {
-		page = 1
-	}
-	perPage := 60
-	from := (page - 1) * perPage
-	to := from + perPage
-	if to > len(files) {
-		to = len(files)
-	}
 
-	data.Page = page
-	data.MaxPage = len(files) / perPage
+	var buffer bytes.Buffer
+	buffer.WriteString(path)
+	buffer.WriteString(strconv.Itoa(page))
+	key := buffer.String()
 
-	data.Pages = []int{}
-	data.Path = path
-	data.DirPath = filepath.Dir(path)
+	item, err := filesListCache.Fetch(key, time.Second*60, func() (interface{}, error) {
+		data := PhotosPageData{Photos: []Photo{}}
 
-	for n := 1; n <= data.MaxPage; n++ {
-		data.Pages = append(data.Pages, n)
-	}
+		// TODO: use reader
+		//files, err := ioutil.ReadDir(fullPath(path))
 
-	for _, f := range files[from:to] {
-		fullPath := filepath.Join(path, f.Name())
+		dirname := fullPath(path)
 
-		if f.IsDir() {
-			data.Photos = append(data.Photos, Photo{Src: fullPath, Name: f.Name(), Directory: true})
-		} else {
-			if f.Mode().IsRegular() {
-				ext := strings.ToUpper(filepath.Ext(f.Name()))
-				if ext == ".CR2" {
-					data.Photos = append(data.Photos, Photo{Src: fullPath, Name: f.Name(), SupportedFormat: true, SendToBrowser: false})
+		f, err := os.Open(dirname)
+		if err != nil {
+			return nil, err
+		}
+		files, err := f.Readdir(-1)
+		f.Close()
+		if err != nil {
+			return nil, err
+		}
+
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		sort.Slice(files, func(i, j int) bool {
+			if files[i].IsDir() {
+				if files[j].IsDir() {
+					return files[i].Name() < files[j].Name()
 				} else {
-					data.Photos = append(data.Photos, Photo{Src: fullPath, Name: f.Name(), SupportedFormat: false, SendToBrowser: true})
+					return true
+				}
+			} else {
+				if files[j].IsDir() {
+					return false
+				} else {
+					return files[i].Name() < files[j].Name()
+				}
+			}
+		})
+
+		if page < 1 {
+			page = 1
+		}
+		perPage := 60
+		from := (page - 1) * perPage
+		to := from + perPage
+		if to > len(files) {
+			to = len(files)
+		}
+
+		data.Page = page
+		data.MaxPage = len(files) / perPage
+
+		if len(files)%perPage != 0 {
+			data.MaxPage += 1
+		}
+
+		data.Pages = []PageNumber{}
+		data.Path = path
+		data.DirPath = filepath.Dir(path)
+
+		data.BreadCrumbs = []BreadCrumb{}
+
+		prev_p := ""
+		for _, p := range strings.Split(data.Path, string(os.PathSeparator)) {
+			itemPath := filepath.Join(prev_p, p)
+			bc := BreadCrumb{
+				Title: p,
+				Path:  itemPath,
+			}
+			data.BreadCrumbs = append(data.BreadCrumbs, bc)
+			prev_p = itemPath
+		}
+
+		for n := 1; n <= data.MaxPage; n++ {
+			data.Pages = append(data.Pages, PageNumber{Num: n, Current: page == n})
+		}
+
+		for _, f := range files[from:to] {
+			fullPath := filepath.Join(path, f.Name())
+
+			if f.IsDir() {
+				data.Photos = append(data.Photos, Photo{Src: fullPath, Name: f.Name(), Directory: true})
+			} else {
+				if f.Mode().IsRegular() {
+					ext := strings.ToUpper(filepath.Ext(f.Name()))
+					if ext == ".CR2" {
+						data.Photos = append(data.Photos, Photo{Src: fullPath, Name: f.Name(), SupportedFormat: true, SendToBrowser: false})
+					} else {
+						data.Photos = append(data.Photos, Photo{Src: fullPath, Name: f.Name(), SupportedFormat: false, SendToBrowser: true})
+					}
 				}
 			}
 		}
+
+		return data, nil
+
+	})
+
+	if err != nil {
+		panic(err)
 	}
+
+	data := item.Value().(PhotosPageData)
 
 	return c.Render(http.StatusOK, "photos", data)
 }
@@ -246,9 +309,19 @@ func process(decodedImageBuffer []byte, flip int) ([]byte, error) {
 
 func PreviewPhotoHandler(c echo.Context) error {
 	filePath := fullPath(c.QueryParam("s"))
-	rawProcessor := raw.NewRawProcessor()
-	defer rawProcessor.Close()
-	data := rawProcessor.ExtractPreview(filePath, process)
+
+	item, err := thumbnailsCache.Fetch(filePath, time.Hour*8, func() (interface{}, error) {
+		rawProcessor := raw.NewRawProcessor()
+		defer rawProcessor.Close()
+		data := rawProcessor.ExtractPreview(filePath, process)
+
+		return data, nil
+	})
+	if err != nil {
+		panic(err)
+	}
+
+	data := item.Value().([]byte)
 
 	return c.Blob(http.StatusOK, "image/jpeg", data)
 }
@@ -269,7 +342,24 @@ func processFull(decodedImageBuffer []byte, flip int) ([]byte, error) {
 func FetchHandler(c echo.Context) error {
 	filePath := fullPath(c.QueryParam("s"))
 
-	return c.File(filePath)
+	f, err := os.Open(filePath)
+	if err != nil {
+		return echo.NotFoundHandler(c)
+	}
+	defer f.Close()
+
+	contentType := mime.TypeByExtension(filepath.Ext(filePath))
+
+	if contentType != "image/jpeg" {
+		c.Response().Header().Set(echo.HeaderContentDisposition, fmt.Sprintf("%s; filename=%q", contentType, filepath.Base(filePath)))
+	}
+
+	//c.Response().Header().Set(echo.HeaderContentType, echo.MIMEApplicationJSONCharsetUTF8)
+	//c.Response().WriteHeader(http.StatusOK)
+	//return json.NewEncoder(c.Response()).Encode(u)
+
+	//return c.File(filePath)
+	return c.Stream(200, contentType, f)
 }
 
 func FullPreviewPhotoHandler(c echo.Context) error {
@@ -282,6 +372,10 @@ func FullPreviewPhotoHandler(c echo.Context) error {
 }
 
 func main() {
+	thumbnailsCache = ccache.New(ccache.Configure().MaxSize(10000).ItemsToPrune(500).GetsPerPromote(1))
+	filesListCache = ccache.New(ccache.Configure().MaxSize(1000).ItemsToPrune(50).GetsPerPromote(1))
+
+	mime.AddExtensionType(".CR2", "image/x-canon-cr2")
 
 	if len(basePath()) < 1 {
 		fmt.Fprintf(os.Stderr, "Please set path to gallery in GALLERY_PATH env var!")

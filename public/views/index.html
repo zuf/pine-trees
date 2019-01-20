@@ -34,8 +34,18 @@
 </p>
 
 <p>
+    {{range .BreadCrumbs}}
+        / <a href="/?s={{.Path}}">{{.Title}}</a>
+    {{end}}
+</p>
+
+<p>
     {{range .Pages}}
-        <a href="/?p={{.}}&s={{$path}}">{{.}}</a>
+        {{if .Current}}
+            <a>{{.Num}}</a>
+        {{else}}
+            <a href="/?p={{.Num}}&s={{$path}}">{{.Num}}</a>
+        {{end}}
     {{end}}
 </p>
 
@@ -43,21 +53,23 @@
     {{range .Photos}}
         {{if .Directory}}
             <div class="dir">
-                <a href="/d?s={{.Src}}"><div class="dir-folder">
+                <a href="/d?s={{.Src}}">
+                    <div class="dir-folder">
                         <div class="folder">
                             <div class="icon"></div>
                         </div>
-                    </div></a>
+                    </div>
+                </a>
                 <p><a href="/d?s={{.Src}}">[ {{.Name}} ]</a></p>
             </div>
         {{else}}
             <div class="photo">
                 {{if .SupportedFormat}}
                     <a href="/g?s={{.Src}}"><img src="/p?s={{.Src}}" title="{{.Name}}"/></a>
-                    <p class="title">{{.Name}}</p>
+                    <p class="title"><a href="/f?s={{.Src}}">{{.Name}}</a></p>
                 {{else}}
                     <a href="/f?s={{.Src}}"><img src="/f?s={{.Src}}" title="{{.Name}}"/></a>
-                    <p class="title">{{.Name}}</p>
+                    <p class="title"><a href="/f?s={{.Src}}">{{.Name}}</a></p>
                 {{end}}
             </div>
         {{end}}
@@ -65,9 +77,15 @@
 </section>
 
 
-{{range .Pages}}
-    <a href="/?p={{.}}">{{.}}</a>
-{{end}}
+<p>
+    {{range .Pages}}
+        {{if .Current}}
+            <a>{{.Num}}</a>
+        {{else}}
+            <a href="/?p={{.Num}}&s={{$path}}">{{.Num}}</a>
+        {{end}}
+    {{end}}
+</p>
 
 </body>
 
