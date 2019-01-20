@@ -277,6 +277,11 @@ func FullPreviewPhotoHandler(c echo.Context) error {
 
 func main() {
 
+	if len(basePath()) < 1 {
+		fmt.Fprintf(os.Stderr, "Please set path to gallery in GALLERY_PATH env var!")
+		os.Exit(1)
+	}
+
 	tpl := &Template{
 		templates: template.Must(template.ParseGlob("public/views/*.html")),
 	}
