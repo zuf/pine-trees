@@ -140,14 +140,20 @@ func Index(c echo.Context) error {
 		log.Fatal(err)
 	}
 
-	sort.Slice(files, func(i, j int) bool {
-		//return files[i].Size() < files[j].Size()
-		return files[i].Name() < files[j].Name()
-	})
-
-	sort.Slice(files, func(i, j int) bool {
-		//return files[i].Size() < files[j].Size()
-		return files[i].IsDir()
+	sort.SliceStable(files, func(i, j int) bool {
+		if files[i].IsDir() {
+			if files[j].IsDir() {
+				return files[i].Name() < files[j].Name()
+			} else {
+				return true
+			}
+		} else {
+			if files[j].IsDir() {
+				return false
+			} else {
+				return files[i].Name() < files[j].Name()
+			}
+		}
 	})
 
 	page := 1
