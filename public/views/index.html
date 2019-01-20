@@ -1,0 +1,74 @@
+{{define "photos"}}<!doctype html>
+<html class="no-js" lang="">
+
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <title></title>
+    <meta name="description" content="">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+    <link rel="manifest" href="site.webmanifest">
+    <link rel="apple-touch-icon" href="icon.png">
+    <!-- Place favicon.ico in the root directory -->
+
+    <link rel="stylesheet" href="css/normalize.css">
+    <link rel="stylesheet" href="css/main.css">
+    <link rel="stylesheet" href="css/folder.css">
+</head>
+
+<body>
+<!--[if lte IE 9]>
+<p class="browserupgrade">You are using an <strong>outdated</strong> browser. Please <a href="https://browsehappy.com/">upgrade
+    your browser</a> to improve your experience and security.</p>
+<![endif]-->
+
+<h1><a href="/">Pine Trees</a></h1>
+
+<hr/>
+
+{{$path := .Path}}
+
+<p>
+    [ <a href="/?s={{.DirPath}}">{{.DirPath}}</a> ]
+</p>
+
+<p>
+    {{range .Pages}}
+        <a href="/?p={{.}}&s={{$path}}">{{.}}</a>
+    {{end}}
+</p>
+
+<section class="photos">
+    {{range .Photos}}
+        {{if .Directory}}
+            <div class="dir">
+                <a href="/d?s={{.Src}}"><div class="dir-folder">
+                        <div class="folder">
+                            <div class="icon"></div>
+                        </div>
+                    </div></a>
+                <p><a href="/d?s={{.Src}}">[ {{.Name}} ]</a></p>
+            </div>
+        {{else}}
+            <div class="photo">
+                {{if .SupportedFormat}}
+                    <a href="/g?s={{.Src}}"><img src="/p?s={{.Src}}" title="{{.Name}}"/></a>
+                    <p class="title">{{.Name}}</p>
+                {{else}}
+                    <a href="/f?s={{.Src}}"><img src="/f?s={{.Src}}" title="{{.Name}}"/></a>
+                    <p class="title">{{.Name}}</p>
+                {{end}}
+            </div>
+        {{end}}
+    {{end}}
+</section>
+
+
+{{range .Pages}}
+    <a href="/?p={{.}}">{{.}}</a>
+{{end}}
+
+</body>
+
+</html>{{end}}
