@@ -1,7 +1,7 @@
 .PHONY: build
 build: deps
 	mkdir -p ./bin
-	go build -o bin/pine-trees main.go
+	go build -o ./bin/pine-trees ./src/main.go
 
 .PHONY: deps
 deps:

@@ -18,7 +18,7 @@ import (
 
 	"github.com/karlseguin/ccache"
 
-	"github.com/zuf/pine-trees/raw"
+	"github.com/zuf/pine-trees/src/raw"
 
 	"github.com/labstack/echo/middleware"
 
@@ -26,7 +26,7 @@ import (
 
 	"gopkg.in/h2non/bimg.v1"
 
-	"github.com/zuf/pine-trees/thumbnailer"
+	"github.com/zuf/pine-trees/src/thumbnailer"
 )
 
 //func DecodeThumb(raw2 *raw.Raw, filePath string) []byte {
@@ -275,7 +275,7 @@ func Index(c echo.Context) error {
 
 func process(decodedImageBuffer []byte, flip int) ([]byte, error) {
 	//if flip == 0 {
-	previewBuffer, err := bimg.NewImage(decodedImageBuffer).SmartCrop(300, 200)
+	previewBuffer, err := bimg.NewImage(decodedImageBuffer).Resize(300, 200)
 	if err != nil {
 		log.Printf("ERROR: %s", err)
 	}

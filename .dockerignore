@@ -1,6 +1,6 @@
 .git
 .idea
-vendor
+#vendor
 bin
 Dockerfile
 Dockerfile*

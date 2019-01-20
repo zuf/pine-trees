@@ -7,7 +7,7 @@ import (
 
 	"gopkg.in/h2non/bimg.v1"
 
-	"github.com/zuf/pine-trees/raw"
+	"github.com/zuf/pine-trees/src/raw"
 )
 
 type Thumbnailer struct {

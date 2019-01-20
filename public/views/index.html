@@ -81,13 +81,18 @@
 
 
 <p>
+    <a href="/?p={{.PrevPage}}&s={{$path}}">&leftarrow;</a>
+
     {{range .Pages}}
         {{if .Current}}
-            <a>{{.Num}}</a>
+            <span>{{.Num}}</span>
         {{else}}
             <a href="/?p={{.Num}}&s={{$path}}">{{.Num}}</a>
         {{end}}
     {{end}}
+
+
+    <a href="/?p={{.NextPage}}&s={{$path}}">&rightarrow;</a>
 </p>
 
 </body>

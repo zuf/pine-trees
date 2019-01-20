@@ -1,7 +1,16 @@
-FROM alpine:edge as builder
+FROM alpine:edge as base
 
-RUN apk add --no-cache ca-certificates openssl ssl_client libssl1.1
+RUN apk add --no-cache libraw libjpeg-turbo libexif ca-certificates openssl
 RUN update-ca-certificates
+#libexif glib expat
+RUN apk add --no-cache --repository http://dl-3.alpinelinux.org/alpine/edge/testing/ --allow-untrusted vips
+
+
+# ==================================
+
+FROM base as builder
+
+RUN apk add --no-cache ssl_client libssl1.1
 
 # set up nsswitch.conf for Go's "netgo" implementation
 # - https://github.com/golang/go/blob/go1.9.1/src/net/conf.go#L194-L275
@@ -66,27 +75,28 @@ WORKDIR $GOPATH
 # ----
 
 RUN apk --no-cache upgrade
-RUN apk add --no-cache build-base libraw libraw-dev libjpeg-turbo libjpeg-turbo-dev libexif libexif-dev wget \
-    git tar glib glib-dev expat expat-dev
-
+RUN apk add --no-cache build-base libraw-dev libjpeg-turbo-dev libexif-dev git
 RUN apk add --no-cache --repository http://dl-3.alpinelinux.org/alpine/edge/testing/ --allow-untrusted vips vips-dev
 
-COPY ./ /app
+COPY ./src /app/src
+COPY ./vendor /app/vendor
+COPY ./go.mod /app/
+COPY ./go.sum /app/
+COPY ./Makefile /app/
+
 WORKDIR /app
 RUN make build
 
 
 # ==========================================================
 
-FROM alpine:edge as app
-
-RUN apk add --no-cache libraw libjpeg-turbo libexif glib expat
-RUN apk add --no-cache --repository http://dl-3.alpinelinux.org/alpine/edge/testing/ --allow-untrusted vips
+FROM base as app
 
 WORKDIR /app
-COPY --from=builder /app/static /app/static
-COPY --from=builder /app/public /app/public
-COPY --from=builder /app/bin/pine-trees /app/bin/
+COPY ./static /app/static
+COPY ./public /app/public
+COPY --from=builder /app/bin/pine-trees /app/bin/pine-trees
+RUN chmod a+x /app/bin/pine-trees
 
 ENV GALLERY_PATH /photos
 VOLUME /photos

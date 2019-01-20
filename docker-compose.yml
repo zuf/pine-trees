@@ -9,5 +9,8 @@ services:
       - 1323:1323
     environment:
       - GALLERY_PATH=/photos
+#      - DEBUG=bimg
+#      - VIPS_TRACE=1
+#      - G_DEBUG=fatal-warnings,fatal-criticals
     volumes:
       - /nas/photo:/photos:ro
