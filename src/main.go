@@ -10,6 +10,7 @@ import (
 	"mime"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -108,6 +109,8 @@ type Photo struct {
 	Directory       bool
 	SupportedFormat bool
 	SendToBrowser   bool
+	IsVideo         bool
+	VideoPreview    string
 }
 
 type PageNumber struct {
@@ -247,15 +250,44 @@ func Index(c echo.Context) error {
 			fullPath := filepath.Join(path, f.Name())
 
 			if f.IsDir() {
-				data.Photos = append(data.Photos, Photo{Src: fullPath, Name: f.Name(), Directory: true})
+				data.Photos = append(data.Photos, Photo{Src: fullPath, Name: f.Name(), Directory: true, IsVideo: false})
 			} else {
 				if f.Mode().IsRegular() {
 					ext := strings.ToUpper(filepath.Ext(f.Name()))
-					if ext == ".CR2" {
-						data.Photos = append(data.Photos, Photo{Src: fullPath, Name: f.Name(), SupportedFormat: true, SendToBrowser: false})
-					} else {
-						data.Photos = append(data.Photos, Photo{Src: fullPath, Name: f.Name(), SupportedFormat: false, SendToBrowser: true})
+					switch ext {
+					case ".CR2":
+						data.Photos = append(data.Photos, Photo{Src: fullPath, Name: f.Name(), SupportedFormat: true, SendToBrowser: false, IsVideo: false})
+						break
+					case ".MOV":
+						ext := filepath.Ext(fullPath)
+						thmPath := fullPath[0:len(fullPath)-len(ext)] + ".THM"
+
+						data.Photos = append(data.Photos, Photo{Src: fullPath, Name: f.Name(),
+							SupportedFormat: false,
+							SendToBrowser:   false,
+							IsVideo:         true,
+							VideoPreview:    thmPath})
+					case ".THM":
+						// do nothing
+						break
+					default:
+						data.Photos = append(data.Photos, Photo{Src: fullPath, Name: f.Name(), SupportedFormat: false, SendToBrowser: true, IsVideo: false})
 					}
+
+					//if ext == ".CR2" {
+					//	data.Photos = append(data.Photos, Photo{Src: fullPath, Name: f.Name(), SupportedFormat: true, SendToBrowser: false, IsVideo: false})
+					//}
+					//if ext == ".MOV" {
+					//	ext := filepath.Ext(fullPath)
+					//	thmPath := fullPath[0:len(fullPath)-len(ext)] + ".THM"
+					//
+					//	data.Photos = append(data.Photos, Photo{Src: fullPath, Name: f.Name(),
+					//		SupportedFormat: false,
+					//		SendToBrowser:   false,
+					//		IsVideo:         true,
+					//		VideoPreview:    thmPath})
+					//}
+
 				}
 			}
 		}
@@ -373,6 +405,30 @@ func FetchHandler(c echo.Context) error {
 	return c.Stream(200, contentType, f)
 }
 
+func StreamVideoHandler(c echo.Context) error {
+	filePath := fullPath(c.QueryParam("s"))
+	cmd := exec.Command("./bin/play-to-stdout.sh", filePath)
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := cmd.Start(); err != nil {
+		log.Fatal(err)
+	}
+
+	// TODO: cmd.Wait() ?
+
+	contentType := "mp4"
+	//contentType := "video/x-flv"
+	//contentType := "video/MP2T"
+
+	c.Response().Header().Set("Accept-Ranges", "bytes")
+	//videoFileName := filepath.Base(filePath) + ".mp4"
+	//c.Response().Header().Set(echo.HeaderContentDisposition, fmt.Sprintf("%s; filename=%q", contentType, videoFileName))
+
+	return c.Stream(200, contentType, stdout)
+}
+
 func FullPreviewPhotoHandler(c echo.Context) error {
 	filePath := fullPath(c.QueryParam("s"))
 	rawProcessor := raw.NewRawProcessor()
@@ -409,6 +465,7 @@ func main() {
 	e.GET("/p", PreviewPhotoHandler)
 	e.GET("/g", FullPreviewPhotoHandler)
 	e.GET("/f", FetchHandler)
+	e.GET("/v", StreamVideoHandler)
 	e.Logger.Fatal(e.Start(":1323"))
 
 }
