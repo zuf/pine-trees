@@ -6,3 +6,6 @@ Dockerfile
 Dockerfile*
 docker-compose.yml
 .dockerignore
+
+bin/go_build*
+bin/pine-trees

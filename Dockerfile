@@ -1,6 +1,6 @@
 FROM alpine:edge as base
 
-RUN apk add --no-cache libraw libjpeg-turbo libexif ca-certificates openssl
+RUN apk add --no-cache libraw libjpeg-turbo libexif ca-certificates openssl ffmpeg
 RUN update-ca-certificates
 #libexif glib expat
 RUN apk add --no-cache --repository http://dl-3.alpinelinux.org/alpine/edge/testing/ --allow-untrusted vips
@@ -95,8 +95,10 @@ FROM base as app
 WORKDIR /app
 COPY ./static /app/static
 COPY ./public /app/public
+COPY ./bin/play-to-stdout.sh /app/bin/play-to-stdout.sh
 COPY --from=builder /app/bin/pine-trees /app/bin/pine-trees
 RUN chmod a+x /app/bin/pine-trees
+RUN chmod a+x /app/bin/play-to-stdout.sh
 
 ENV GALLERY_PATH /photos
 VOLUME /photos
