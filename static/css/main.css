@@ -293,12 +293,31 @@ textarea {
 
 @import url('https://fonts.googleapis.com/css?family=Open+Sans:400,600&subset=cyrillic');
 
-body {
+html, body {
     font-family: 'Open Sans', sans-serif;
+    background: rgb(22, 12, 4);
+    color: #fff;
+}
+
+a {
+    color: #f3d591;
+    text-decoration: none;
+}
+
+a:hover {
+    text-decoration: underline;
+}
+
+a:visited {
+    color: #9e824a;
+}
+
+header a {
+    color: #fff;
 }
 
 .photos {
-    background: rgb(22, 12, 4);
+
     color: #fff;
     display: flex;
     flex-wrap: wrap;

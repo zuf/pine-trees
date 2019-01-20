@@ -23,15 +23,13 @@
     your browser</a> to improve your experience and security.</p>
 <![endif]-->
 
-<h1><a href="/">Pine Trees</a></h1>
+<header>
+    <h1><a href="/">Pine Trees</a></h1>
+</header>
 
 <hr/>
 
 {{$path := .Path}}
-
-<p>
-    [ <a href="/?s={{.DirPath}}">{{.DirPath}}</a> ]
-</p>
 
 <p>
     {{range .BreadCrumbs}}
@@ -40,13 +38,18 @@
 </p>
 
 <p>
+    <a href="/?p={{.PrevPage}}&s={{$path}}">&leftarrow;</a>
+
     {{range .Pages}}
         {{if .Current}}
-            <a>{{.Num}}</a>
+            <span>{{.Num}}</span>
         {{else}}
             <a href="/?p={{.Num}}&s={{$path}}">{{.Num}}</a>
         {{end}}
     {{end}}
+
+
+    <a href="/?p={{.NextPage}}&s={{$path}}">&rightarrow;</a>
 </p>
 
 <section class="photos">

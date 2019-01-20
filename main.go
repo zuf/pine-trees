@@ -128,6 +128,8 @@ type PhotosPageData struct {
 	Path        string
 	DirPath     string
 	BreadCrumbs []BreadCrumb
+	PrevPage    int
+	NextPage    int
 }
 
 func basePath() string {
@@ -216,6 +218,15 @@ func Index(c echo.Context) error {
 		data.DirPath = filepath.Dir(path)
 
 		data.BreadCrumbs = []BreadCrumb{}
+
+		data.PrevPage = data.Page - 1
+		if data.PrevPage < 1 {
+			data.PrevPage = 1
+		}
+		data.NextPage = data.Page + 1
+		if data.NextPage > data.MaxPage {
+			data.NextPage = data.MaxPage
+		}
 
 		prev_p := ""
 		for _, p := range strings.Split(data.Path, string(os.PathSeparator)) {
@@ -391,6 +402,8 @@ func main() {
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
 	e.Renderer = tpl
+	e.HideBanner = true
+
 	e.GET("/", Index)
 	e.GET("/d", Index)
 	e.GET("/p", PreviewPhotoHandler)
