@@ -1,0 +1,13 @@
+version: '3.6'
+
+services:
+
+  pine-trees:
+    image: zufzzi/pine-trees
+    build: ./
+    ports:
+      - 1323:1323
+    environment:
+      - GALLERY_PATH=/photos
+    volumes:
+      - /nas/photo:/photos:ro

@@ -12,4 +12,4 @@ run: build
 	./bin/pine-trees
 
 docker-image:
-	docker build -t pine-trees .
+	docker build -t zufzzi/pine-trees .
