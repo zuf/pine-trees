@@ -374,3 +374,8 @@ header a {
 .title a:hover {
     text-decoration: underline;
 }
+
+.breadcrumbs a {
+    margin-left: .5em;
+    margin-right: .5em;
+}

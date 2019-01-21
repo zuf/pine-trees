@@ -407,6 +407,11 @@ func FetchHandler(c echo.Context) error {
 
 func StreamVideoHandler(c echo.Context) error {
 	filePath := fullPath(c.QueryParam("s"))
+
+	// TODO: refactor extension hack (remove fake .mp4 which was placed for browser)
+	ext := filepath.Ext(filePath)
+	filePath = filePath[0 : len(filePath)-len(ext)]
+
 	cmd := exec.Command("./bin/play-to-stdout.sh", filePath)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
