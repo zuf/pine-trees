@@ -15,6 +15,8 @@
     <link rel="stylesheet" href="css/normalize.css">
     <link rel="stylesheet" href="css/main.css">
     <link rel="stylesheet" href="css/folder.css">
+
+    <link rel="stylesheet" href="/css/smartphoto.css">
 </head>
 
 <body>
@@ -38,18 +40,18 @@
 </p>
 
 <p>
-    <a href="/?p={{.PrevPage}}&s={{$path}}">&leftarrow;</a>
+    <a href="/?p={{.PrevPage}}&amp;s={{$path}}">&leftarrow;</a>
 
     {{range .Pages}}
         {{if .Current}}
             <span>{{.Num}}</span>
         {{else}}
-            <a href="/?p={{.Num}}&s={{$path}}">{{.Num}}</a>
+            <a href="/?p={{.Num}}&amp;s={{$path}}">{{.Num}}</a>
         {{end}}
     {{end}}
 
 
-    <a href="/?p={{.NextPage}}&s={{$path}}">&rightarrow;</a>
+    <a href="/?p={{.NextPage}}&amp;s={{$path}}">&rightarrow;</a>
 </p>
 
 <section class="photos">
@@ -68,14 +70,16 @@
         {{else}}
             <div class="photo">
                 {{if .SupportedFormat}}
-                    <a href="/g?s={{.Src}}" rel="0"><img src="/p?s={{.Src}}" title="{{.Name}}"/></a>
+                    {{/* RAW */}}
+                    <a href="/g?s={{.Src}}" rel="0" class="jsp" data-caption="{{.Name}}" data-id="{{.Name}}" data-group="0" ><img src="/p?s={{.Src}}" title="{{.Name}}"/></a>
                     <p class="title"><a href="/f?s={{.Src}}">{{.Name}}</a></p>
                 {{else}}
                     {{if .IsVideo}}
-                        <a href="/v?s={{.Src}}"><img src="/f?s={{.VideoPreview}}" title="{{.Name}}"/></a>
+                        <a href="/v?s={{.Src}}"><img src="/f?s={{.VideoPreview}}" title="{{.Name}}" /></a>
                         <p class="title"><a href="/f?s={{.Src}}">{{.Name}}</a></p>
                     {{else}}
-                        <a href="/f?s={{.Src}}" rel="0"><img src="/f?s={{.Src}}" title="{{.Name}}"/></a>
+                        {{/* JPEG / PNG / GIF / SVG / etc */}}
+                        <a href="/f?s={{.Src}}" rel="0"  class="jsp" data-caption="{{.Name}}" data-id="{{.Name}}" data-group="0"><img src="/f?s={{.Src}}" title="{{.Name}}" /></a>
                         <p class="title"><a href="/f?s={{.Src}}">{{.Name}}</a></p>
                     {{end}}
                 {{end}}
@@ -86,23 +90,31 @@
 
 
 <p>
-    <a href="/?p={{.PrevPage}}&s={{$path}}">&leftarrow;</a>
+    <a href="/?p={{.PrevPage}}&amp;s={{$path}}">&leftarrow;</a>
 
     {{range .Pages}}
         {{if .Current}}
             <span>{{.Num}}</span>
         {{else}}
-            <a href="/?p={{.Num}}&s={{$path}}">{{.Num}}</a>
+            <a href="/?p={{.Num}}&amp;s={{$path}}">{{.Num}}</a>
         {{end}}
     {{end}}
 
 
-    <a href="/?p={{.NextPage}}&s={{$path}}">&rightarrow;</a>
+    <a href="/?p={{.NextPage}}&amp;s={{$path}}">&rightarrow;</a>
 </p>
 
 
-<script src="/js/0.min.js"></script>
-
+{{/*<script src="/js/0.min.js"></script>*/}}
+{{/* https://github.com/appleple/SmartPhoto */}}
+<script src="/js/smartphoto.min.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded',function(){
+        new SmartPhoto(".jsp",{
+            // resizeStyle: 'fit' // 'fill'
+        });
+    });
+</script>
 </body>
 
 </html>{{end}}
