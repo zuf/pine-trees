@@ -455,6 +455,7 @@ func main() {
 
 	e := echo.New()
 	e.Static("/css", "static/css")
+	e.Static("/js", "static/js")
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
 	e.Renderer = tpl
