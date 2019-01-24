@@ -2,7 +2,9 @@ package main
 
 import (
 	"bufio"
-	"bytes"
+	"crypto/md5"
+	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"html/template"
 	"io"
@@ -17,6 +19,8 @@ import (
 	"strings"
 	"time"
 
+	bimg2 "gopkg.in/h2non/bimg.v1"
+
 	"github.com/karlseguin/ccache"
 
 	"github.com/zuf/pine-trees/src/raw"
@@ -24,8 +28,6 @@ import (
 	"github.com/labstack/echo/middleware"
 
 	"github.com/labstack/echo"
-
-	"gopkg.in/h2non/bimg.v1"
 
 	"github.com/zuf/pine-trees/src/thumbnailer"
 )
@@ -70,7 +72,7 @@ func processFromStdin() {
 		startedAt := time.Now()
 		for imageBuffer := range thmb.ResultChan() {
 			name := fmt.Sprintf("/tmp/images_test/new_test_%d.jpg", n)
-			err := bimg.Write(name, imageBuffer)
+			err := bimg2.Write(name, imageBuffer)
 
 			if err != nil {
 				fmt.Printf("ERROR: %s", err)
@@ -156,20 +158,41 @@ func Index(c echo.Context) error {
 	page := 1
 	page, _ = strconv.Atoi(c.QueryParam("p"))
 
-	var buffer bytes.Buffer
-	buffer.WriteString(path)
-	buffer.WriteString(strconv.Itoa(page))
-	key := buffer.String()
+	h := md5.New()
+	io.WriteString(h, path)
+	io.WriteString(h, strconv.Itoa(page))
+	dirName := fullPath(path)
 
-	item, err := filesListCache.Fetch(key, time.Second*60, func() (interface{}, error) {
+	fi, err := os.Stat(dirName)
+	if err != nil {
+		c.Logger().Errorf("Error while making ETag header for directory \"%s\": %s", dirName, err)
+		return err
+	}
+
+	io.WriteString(h, strconv.FormatInt(fi.Size(), 36))
+	io.WriteString(h, strconv.FormatInt(fi.ModTime().UTC().UnixNano(), 36))
+
+	c.Response().Header().Set("Cache-Control", "max-age=60")
+	// TODO: last mod time in this dir for las modified file instead of directory or min(lastFileModTime, dirModTilme)?
+	c.Response().Header().Set("Last-Modified", fi.ModTime().UTC().Format(http.TimeFormat))
+	//c.Response().Header().Set("Last-Modified", fi.ModTime().UTC().Format(http.TimeFormat))
+
+	etagKey := hex.EncodeToString(h.Sum(nil))
+
+	if err != nil {
+		c.Logger().Errorf("Error while making ETag header for directory \"%s\": %s", dirName, err)
+		return err
+	} else {
+		c.Response().Header().Set("ETag", etagKey)
+	}
+
+	item, err := filesListCache.Fetch(etagKey, time.Second*60, func() (interface{}, error) {
 		data := PhotosPageData{Photos: []Photo{}}
 
 		// TODO: use reader
 		//files, err := ioutil.ReadDir(fullPath(path))
 
-		dirname := fullPath(path)
-
-		f, err := os.Open(dirname)
+		f, err := os.Open(dirName)
 		if err != nil {
 			return nil, err
 		}
@@ -255,9 +278,12 @@ func Index(c echo.Context) error {
 				if f.Mode().IsRegular() {
 					ext := strings.ToUpper(filepath.Ext(f.Name()))
 					switch ext {
+					// TODO: add other supported RAW files
+					case ".NRW":
+						fallthrough
 					case ".CR2":
 						data.Photos = append(data.Photos, Photo{Src: fullPath, Name: f.Name(), SupportedFormat: true, SendToBrowser: false, IsVideo: false})
-						break
+
 					case ".MOV":
 						ext := filepath.Ext(fullPath)
 						thmPath := fullPath[0:len(fullPath)-len(ext)] + ".THM"
@@ -267,27 +293,30 @@ func Index(c echo.Context) error {
 							SendToBrowser:   false,
 							IsVideo:         true,
 							VideoPreview:    thmPath})
+
 					case ".THM":
 						// do nothing
-						break
-					default:
+
+					case "JPG":
+						fallthrough
+					case "JPEG":
+						fallthrough
+					case "JPE":
+						fallthrough
+					case "PNG":
+						fallthrough
+					case "GIF":
+						fallthrough
+					case "SVG":
+						fallthrough
+					case "SVGZ":
 						data.Photos = append(data.Photos, Photo{Src: fullPath, Name: f.Name(), SupportedFormat: false, SendToBrowser: true, IsVideo: false})
+					default:
+						// TODO: try to get preview through libraw, oterwise fallback to default (send file as is)
+						data.Photos = append(data.Photos, Photo{Src: fullPath, Name: f.Name(), SupportedFormat: true, SendToBrowser: false, IsVideo: false})
+
+						//data.Photos = append(data.Photos, Photo{Src: fullPath, Name: f.Name(), SupportedFormat: false, SendToBrowser: true, IsVideo: false})
 					}
-
-					//if ext == ".CR2" {
-					//	data.Photos = append(data.Photos, Photo{Src: fullPath, Name: f.Name(), SupportedFormat: true, SendToBrowser: false, IsVideo: false})
-					//}
-					//if ext == ".MOV" {
-					//	ext := filepath.Ext(fullPath)
-					//	thmPath := fullPath[0:len(fullPath)-len(ext)] + ".THM"
-					//
-					//	data.Photos = append(data.Photos, Photo{Src: fullPath, Name: f.Name(),
-					//		SupportedFormat: false,
-					//		SendToBrowser:   false,
-					//		IsVideo:         true,
-					//		VideoPreview:    thmPath})
-					//}
-
 				}
 			}
 		}
@@ -307,20 +336,20 @@ func Index(c echo.Context) error {
 
 func process(decodedImageBuffer []byte, flip int) ([]byte, error) {
 	//if flip == 0 {
-	previewBuffer, err := bimg.NewImage(decodedImageBuffer).Resize(300, 200)
+	previewBuffer, err := bimg2.NewImage(decodedImageBuffer).Resize(300, 200)
 	if err != nil {
 		log.Printf("ERROR: %s", err)
 	}
 	return previewBuffer, err
 	//} else {
 	//
-	//	image := bimg.NewImage(decodedImageBuffer)
-	//	options := bimg.Options{
+	//	image := bimg2.NewImage(decodedImageBuffer)
+	//	options := bimg2.Options{
 	//		Width:  300,
 	//		Height: 200,
 	//		Crop:   true,
 	//
-	//		Gravity: bimg.GravitySmart,
+	//		Gravity: bimg2.GravitySmart,
 	//	}
 	//
 	//	switch flip {
@@ -353,15 +382,23 @@ func process(decodedImageBuffer []byte, flip int) ([]byte, error) {
 func PreviewPhotoHandler(c echo.Context) error {
 	filePath := fullPath(c.QueryParam("s"))
 
+	err := writeCacheHeaders(c, filePath)
+	if err != nil {
+		c.Logger().Errorf("Can't write cache headers: %s", err)
+	}
+
 	item, err := thumbnailsCache.Fetch(filePath, time.Hour*8, func() (interface{}, error) {
 		rawProcessor := raw.NewRawProcessor()
 		defer rawProcessor.Close()
-		data := rawProcessor.ExtractPreview(filePath, process)
+		data, err := rawProcessor.ExtractPreview(filePath, process)
+		if err != nil {
+			return nil, err
+		}
 
 		return data, nil
 	})
 	if err != nil {
-		panic(err)
+		return FetchHandler(c)
 	}
 
 	data := item.Value().([]byte)
@@ -375,18 +412,65 @@ func processFull(decodedImageBuffer []byte, flip int) ([]byte, error) {
 	copy(tmp, decodedImageBuffer)
 	return tmp, nil
 	//
-	//buf, err := bimg.NewImage(decodedImageBuffer).SmartCrop(1920, 1200)
+	//buf, err := bimg2.NewImage(decodedImageBuffer).SmartCrop(1920, 1200)
 	//if err != nil {
 	//	log.Printf("ERROR: %s", err)
 	//}
 	//return buf, err
 }
 
+func makeETagFromFile(fi os.FileInfo, filePath string) (string, error) {
+	h := md5.New()
+	_, err := io.WriteString(h, "ajo9e75thgalzdkfuhgei8a") // some salt
+	if err != nil {
+		panic("Can't make ETag")
+	}
+
+	int64ByteBuf := make([]byte, 2*binary.MaxVarintLen64)
+	binary.PutVarint(int64ByteBuf, fi.ModTime().UTC().UnixNano())
+	binary.PutVarint(int64ByteBuf[binary.MaxVarintLen64:2*binary.MaxVarintLen64], fi.Size())
+
+	io.WriteString(h, filePath)
+
+	// TODO: read some bytes from file for md5 sum?
+
+	etag := h.Sum(int64ByteBuf)
+
+	return hex.EncodeToString(etag), nil
+}
+
+func writeCacheHeaders(c echo.Context, filePath string) error {
+	fi, err := os.Stat(filePath)
+	if err != nil {
+		c.Logger().Errorf("Error while making ETag header for file \"%s\": %s", filePath, err)
+		return err
+	}
+
+	c.Response().Header().Set("Cache-Control", "max-age=3600")
+	c.Response().Header().Set("Last-Modified", fi.ModTime().UTC().Format(http.TimeFormat))
+
+	etagStr, err := makeETagFromFile(fi, filePath)
+	if err != nil {
+		c.Logger().Errorf("Error while making ETag header for file \"%s\": %s", filePath, err)
+		return err
+	} else {
+		c.Response().Header().Set("ETag", etagStr)
+	}
+
+	return nil
+}
+
 func FetchHandler(c echo.Context) error {
 	filePath := fullPath(c.QueryParam("s"))
 
+	err := writeCacheHeaders(c, filePath)
+	if err != nil {
+		c.Logger().Errorf("Can't write cache headers: %s", err)
+	}
+
 	f, err := os.Open(filePath)
 	if err != nil {
+		c.Logger().Errorf("Can't open file \"%s\": %s", filePath, err)
 		return echo.NotFoundHandler(c)
 	}
 	defer f.Close()
@@ -397,12 +481,7 @@ func FetchHandler(c echo.Context) error {
 		c.Response().Header().Set(echo.HeaderContentDisposition, fmt.Sprintf("%s; filename=%q", contentType, filepath.Base(filePath)))
 	}
 
-	//c.Response().Header().Set(echo.HeaderContentType, echo.MIMEApplicationJSONCharsetUTF8)
-	//c.Response().WriteHeader(http.StatusOK)
-	//return json.NewEncoder(c.Response()).Encode(u)
-
-	//return c.File(filePath)
-	return c.Stream(200, contentType, f)
+	return c.Stream(http.StatusOK, contentType, f)
 }
 
 func StreamVideoHandler(c echo.Context) error {
@@ -436,18 +515,32 @@ func StreamVideoHandler(c echo.Context) error {
 
 func FullPreviewPhotoHandler(c echo.Context) error {
 	filePath := fullPath(c.QueryParam("s"))
+
+	// TODO: move raw processor to worker pool
 	rawProcessor := raw.NewRawProcessor()
 	defer rawProcessor.Close()
-	data := rawProcessor.ExtractPreview(filePath, processFull)
+	data, err := rawProcessor.ExtractPreview(filePath, processFull)
+	if err != nil {
+		//return err
+		return FetchHandler(c)
+	}
+
+	err = writeCacheHeaders(c, filePath)
+	if err != nil {
+		c.Logger().Errorf("Can't write cache headers: %s", err)
+	}
 
 	return c.Blob(http.StatusOK, "image/jpeg", data)
 }
 
 func main() {
+	// TODO: move magick numbers to default consts / env vars / config
 	thumbnailsCache = ccache.New(ccache.Configure().MaxSize(10000).ItemsToPrune(500).GetsPerPromote(1))
 	filesListCache = ccache.New(ccache.Configure().MaxSize(1000).ItemsToPrune(50).GetsPerPromote(1))
 
+	// TODO: add another extensions
 	mime.AddExtensionType(".CR2", "image/x-canon-cr2")
+	mime.AddExtensionType(".NRW", "application/x-extension-NRW")
 
 	if len(basePath()) < 1 {
 		fmt.Fprintf(os.Stderr, "Please set path to gallery in GALLERY_PATH env var!")
@@ -462,7 +555,7 @@ func main() {
 	e.Static("/css", "static/css")
 	e.Static("/js", "static/js")
 	e.Use(middleware.Logger())
-	e.Use(middleware.Recover())
+	//e.Use(middleware.Recover())
 	e.Renderer = tpl
 	e.HideBanner = true
 

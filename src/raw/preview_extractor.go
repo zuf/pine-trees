@@ -6,6 +6,7 @@ package raw
 */
 import "C"
 import (
+	"errors"
 	"fmt"
 	"unsafe"
 )
@@ -15,11 +16,12 @@ type PreviewOptions struct {
 	Height int
 }
 
-func panicOnError(filePath string, result int) {
+func returnCodeToError(filePath string, result int) error {
 	if result != 0 {
 		strError := C.GoString(C.libraw_strerror(C.int(result)))
-		panic(fmt.Sprintf("LibRaw error for file \"%s\": %s (%d)", filePath, strError, result))
+		return errors.New(fmt.Sprintf("LibRaw error for file \"%s\": %s (%d)", filePath, strError, result))
 	}
+	return nil
 }
 
 type Raw struct {
@@ -42,15 +44,22 @@ func (r *Raw) Close() {
 	//C.free(unsafe.Pointer(r.libRaw))
 }
 
-func (r *Raw) ExtractPreview(filePath string, callback func(decodedImageBuffer []byte, flip int) ([]byte, error)) []byte {
+func (r *Raw) ExtractPreview(filePath string, callback func(decodedImageBuffer []byte, flip int) ([]byte, error)) ([]byte, error) {
 	cPath := C.CString(filePath)
 	defer C.free(unsafe.Pointer(cPath))
-	resultCode := int(C.libraw_open_file(r.libRaw, cPath))
 
-	panicOnError(filePath, resultCode)
+	resultCode := int(C.libraw_open_file(r.libRaw, cPath))
+	if resultCode != 0 {
+
+		// TODO: try to fallback with exiftool
+
+		return nil, returnCodeToError(filePath, resultCode)
+	}
 
 	resultCode = int(C.libraw_unpack_thumb(r.libRaw))
-	panicOnError(filePath, resultCode)
+	if resultCode != 0 {
+		return nil, returnCodeToError(filePath, resultCode)
+	}
 
 	defer C.libraw_recycle(r.libRaw)
 
@@ -58,14 +67,14 @@ func (r *Raw) ExtractPreview(filePath string, callback func(decodedImageBuffer [
 	var buffer []byte
 	const buf_size = 1 << 30
 	if r.libRaw.thumbnail.tlength > buf_size {
-		panic(fmt.Sprintf("Too big thumbnail image \"%s\" %d bytes. It larger than limit of %d bytes", filePath, int(r.libRaw.thumbnail.tlength), buf_size))
+		return nil, errors.New(fmt.Sprintf("Too big thumbnail image \"%s\" %d bytes. It larger than limit of %d bytes", filePath, int(r.libRaw.thumbnail.tlength), buf_size))
 	}
 	buffer = (*[buf_size]byte)(unsafe.Pointer(r.libRaw.thumbnail.thumb))[0:r.libRaw.thumbnail.tlength]
 
 	newImage, err := callback(buffer, int(r.libRaw.sizes.flip))
 	if err != nil {
-		panic(err) // TODO: return errors
+		return nil, err
 	}
 
-	return newImage
+	return newImage, nil
 }

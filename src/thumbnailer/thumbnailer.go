@@ -1,11 +1,12 @@
 package thumbnailer
 
 import (
+	"fmt"
 	"log"
 	"runtime"
 	"sync"
 
-	"gopkg.in/h2non/bimg.v1"
+	bimg2 "gopkg.in/h2non/bimg.v1"
 
 	"github.com/zuf/pine-trees/src/raw"
 )
@@ -96,9 +97,13 @@ func (t *Thumbnailer) ResultChan() <-chan []byte {
 	return t.results
 }
 
-func (t *Thumbnailer) ProcessOne(filePath string) []byte {
-	buf := t.rawProcessor.ExtractPreview(filePath, process)
-	return buf
+func (t *Thumbnailer) ProcessOne(filePath string) ([]byte, error) {
+	buf, err := t.rawProcessor.ExtractPreview(filePath, process)
+	if err != nil {
+		return nil, err
+	}
+
+	return buf, nil
 }
 
 func (t *Thumbnailer) worker(jobs <-chan string, results chan<- []byte) {
@@ -106,14 +111,20 @@ func (t *Thumbnailer) worker(jobs <-chan string, results chan<- []byte) {
 	defer rawProcessor.Close()
 
 	for filePath := range jobs {
-		results <- rawProcessor.ExtractPreview(filePath, process)
+		buf, err := rawProcessor.ExtractPreview(filePath, process)
+		if err != nil {
+			// TODO: do tomething sane
+			fmt.Errorf("RAW file error: %s", err)
+		} else {
+			results <- buf
+		}
 	}
 
 	t.wg.Done()
 }
 
 func process(decodedImageBuffer []byte, flip int) ([]byte, error) {
-	previewBuffer, err := bimg.NewImage(decodedImageBuffer).SmartCrop(300, 200)
+	previewBuffer, err := bimg2.NewImage(decodedImageBuffer).SmartCrop(300, 200)
 	if err != nil {
 		log.Printf("ERROR: %s", err)
 	}
