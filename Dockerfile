@@ -1,4 +1,4 @@
-FROM alpine:edge as base
+FROM alpine:3.9 as base
 
 RUN apk add --no-cache libraw libjpeg-turbo libexif ca-certificates openssl ffmpeg
 RUN update-ca-certificates
@@ -104,4 +104,3 @@ ENV GALLERY_PATH /photos
 VOLUME /photos
 
 CMD /app/bin/pine-trees
-
