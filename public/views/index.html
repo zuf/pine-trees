@@ -55,7 +55,7 @@
 <section id="photos" class="photos">
     {{range .Photos}}
         {{if .Directory}}
-            <div class="dir">
+            <div class="element dir">
                 <a href="/d?s={{.Src}}">
                     <div class="dir-folder">
                         <div class="folder">
@@ -66,7 +66,7 @@
                 <p><a href="/d?s={{.Src}}">[ {{.Name}} ]</a></p>
             </div>
         {{else}}
-            <div class="photo">
+            <div class="element photo">
                 {{if .SupportedFormat}}
                     {{/* RAW */}}
                     <a href="/g?s={{.Src}}" class="jsp"><img src="/p?s={{.Src}}"
@@ -109,7 +109,7 @@
     {{end}}
 
 
-    <a href="/?p={{.NextPage}}&amp;s={{$path}}">&rightarrow;</a>
+    <a class="next-page" href="/?p={{.NextPage}}&amp;s={{$path}}">&rightarrow;</a>
 </p>
 
 
@@ -127,6 +127,7 @@
 
 
 <script src="/js/BigPicture.min.js"></script>
+<script src="/js/infinite-scroll.pkgd.js"></script>
 <script src="/js/app.js"></script>
 
 </body>
