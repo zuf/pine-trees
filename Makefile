@@ -19,5 +19,5 @@ run: build
 	./bin/pine-trees
 
 docker-image:
-	@echo docker build -t ${DOCKER_IMAGE_NAME}:${TAG} .
-	@echo docker tag ${DOCKER_IMAGE_NAME}:${TAG} ${DOCKER_IMAGE_NAME}:latest
+	docker build -t ${DOCKER_IMAGE_NAME}:${TAG} .
+	docker tag ${DOCKER_IMAGE_NAME}:${TAG} ${DOCKER_IMAGE_NAME}:latest
