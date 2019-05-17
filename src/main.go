@@ -165,8 +165,10 @@ func Index(c echo.Context) error {
 
 	fi, err := os.Stat(dirName)
 	if err != nil {
-		c.Logger().Errorf("Error while making ETag header for directory \"%s\": %s", dirName, err)
-		return err
+		c.Logger().Errorf("Can't read directory \"%s\": %s", dirName, err)
+
+		//return err
+		return echo.NewHTTPError(http.StatusNotFound, "Directory not found")
 	}
 
 	io.WriteString(h, strconv.FormatInt(fi.Size(), 36))
@@ -178,13 +180,7 @@ func Index(c echo.Context) error {
 	//c.Response().Header().Set("Last-Modified", fi.ModTime().UTC().Format(http.TimeFormat))
 
 	etagKey := hex.EncodeToString(h.Sum(nil))
-
-	if err != nil {
-		c.Logger().Errorf("Error while making ETag header for directory \"%s\": %s", dirName, err)
-		return err
-	} else {
-		c.Response().Header().Set("ETag", etagKey)
-	}
+	c.Response().Header().Set("ETag", etagKey)
 
 	item, err := filesListCache.Fetch(etagKey, time.Second*60, func() (interface{}, error) {
 		data := PhotosPageData{Photos: []Photo{}}
@@ -193,17 +189,14 @@ func Index(c echo.Context) error {
 		//files, err := ioutil.ReadDir(fullPath(path))
 
 		f, err := os.Open(dirName)
+		defer f.Close()
+
 		if err != nil {
 			return nil, err
 		}
 		files, err := f.Readdir(-1)
-		f.Close()
 		if err != nil {
 			return nil, err
-		}
-
-		if err != nil {
-			log.Fatal(err)
 		}
 
 		sort.Slice(files, func(i, j int) bool {
@@ -228,6 +221,11 @@ func Index(c echo.Context) error {
 		perPage := 60
 		from := (page - 1) * perPage
 		to := from + perPage
+
+		if from > len(files) {
+			from = len(files)
+		}
+
 		if to > len(files) {
 			to = len(files)
 		}
@@ -324,10 +322,6 @@ func Index(c echo.Context) error {
 		return data, nil
 
 	})
-
-	if err != nil {
-		panic(err)
-	}
 
 	data := item.Value().(PhotosPageData)
 
