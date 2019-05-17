@@ -20,6 +20,7 @@
 </head>
 
 <body>
+<div id="conf" data-maxpage="{{.MaxPage}}"></div>
 <!--[if lte IE 9]>
 <p class="browserupgrade">You are using an <strong>outdated</strong> browser. Please <a href="https://browsehappy.com/">upgrade
     your browser</a> to improve your experience and security.</p>
@@ -63,7 +64,7 @@
                         </div>
                     </div>
                 </a>
-                <p><a href="/d?s={{.Src}}">[ {{.Name}} ]</a></p>
+                <p><a href="/d?s={{.Src}}&amp;p=1">[ {{.Name}} ]</a></p>
             </div>
         {{else}}
             <div class="element photo">
