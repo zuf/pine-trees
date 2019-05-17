@@ -381,3 +381,8 @@ header a {
     margin-left: .5em;
     margin-right: .5em;
 }
+
+.page-load-status {
+    text-align: center;
+    display: none;
+}

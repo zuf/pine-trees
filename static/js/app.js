@@ -1,8 +1,5 @@
-document.addEventListener('DOMContentLoaded', function () {
-
-    var imageLinks = document.querySelectorAll('a.jsp');
+function setPreviewBoxForElements(imageLinks) {
     for (var i = 0; i < imageLinks.length; i++) {
-
         // imageLinks[i].addEventListener('click', function (e) {
         //     e.preventDefault();
         //     BigPicture({
@@ -49,8 +46,14 @@ document.addEventListener('DOMContentLoaded', function () {
     //         });
     //     })
     // }
+}
 
-    var infScroll = new InfiniteScroll( '.photos', {
+document.addEventListener('DOMContentLoaded', function () {
+
+    setPreviewBoxForElements(document.querySelectorAll('a.jsp'));
+
+
+    var infScroll = new InfiniteScroll('.photos', {
         // defaults listed
 
         path: '.next-page',
@@ -73,7 +76,7 @@ document.addEventListener('DOMContentLoaded', function () {
         // Set to string if path is not set as selector string:
         //   checkLastPage: '.pagination__next'
 
-        prefill: false,
+        prefill: true,
         // Loads and appends pages on intialization until scroll requirement is met.
 
         responseType: 'document',
@@ -105,7 +108,7 @@ document.addEventListener('DOMContentLoaded', function () {
         hideNav: undefined,
         // Hides navigation element
 
-        status: undefined,
+        status: '.page-load-status',
         // Displays status elements indicating state of page loading:
         // .infinite-scroll-request, .infinite-scroll-load, .infinite-scroll-error
         // status: '.page-load-status'
@@ -123,5 +126,15 @@ document.addEventListener('DOMContentLoaded', function () {
 
         debug: false,
         // Logs events and state changes to the console.
+    });
+
+    infScroll.on( 'append', function (response, path, items) {
+        for (var i=0; i<items.length;i++){
+            setPreviewBoxForElements(items[i].querySelectorAll('a.jsp'));
+        }
+    });
+
+    infScroll.on( 'error', function( error, path ) {
+        console.log("Error: " + error + " on path: " + path);
     });
 });
