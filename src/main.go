@@ -284,9 +284,13 @@ func Index(c echo.Context) error {
 					case ".CR2":
 						data.Photos = append(data.Photos, Photo{Src: fullPath, Name: f.Name(), SupportedFormat: true, SendToBrowser: false, IsVideo: false})
 
-					case ".MOV":
+					case ".MOV", ".MP4", ".MKV", ".AVI", ".M4V":
 						ext := filepath.Ext(fullPath)
 						thmPath := fullPath[0:len(fullPath)-len(ext)] + ".THM"
+						_, err := os.Stat(thmPath)
+						if err != nil {
+							thmPath = fullPath
+						}
 
 						data.Photos = append(data.Photos, Photo{Src: fullPath, Name: f.Name(),
 							SupportedFormat: false,
@@ -541,8 +545,50 @@ func FetchHandler(c echo.Context) error {
 	return c.Stream(http.StatusOK, contentType, f)
 }
 
+func VideoThumbnailHandler(c echo.Context) error {
+	filePath := fullPath(c.QueryParam("s"))
+
+	_, err := os.Stat(filePath)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusNotFound, "Can't read file")
+	}
+
+	// TODO: refactor extension hack (remove fake .mp4 which was placed for browser)
+	//ext := filepath.Ext(filePath)
+	//filePath = filePath[0 : len(filePath)-len(ext)]
+
+	log.Println(filePath)
+
+	cmd := exec.Command("./bin/thumbnail-from-video.sh", filePath)
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		log.Println(err)
+		return echo.NewHTTPError(http.StatusInternalServerError, err)
+
+	}
+
+	err = cmd.Start()
+	if err != nil {
+		log.Println(err)
+		return echo.NewHTTPError(http.StatusInternalServerError, err)
+	}
+
+	// TODO: cmd.Wait() ?
+
+	contentType := "image/jpeg"
+
+	c.Response().Header().Set("Accept-Ranges", "bytes")
+	//c.Response().Header().Set("Content-Length", "1000500")
+	return c.Stream(200, contentType, stdout)
+}
+
 func StreamVideoHandler(c echo.Context) error {
 	filePath := fullPath(c.QueryParam("s"))
+
+	_, err := os.Stat(filePath)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusNotFound, "Can't read file")
+	}
 
 	// TODO: refactor extension hack (remove fake .mp4 which was placed for browser)
 	ext := filepath.Ext(filePath)
@@ -551,15 +597,17 @@ func StreamVideoHandler(c echo.Context) error {
 	cmd := exec.Command("./bin/play-to-stdout.sh", filePath)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
+		return echo.NewHTTPError(http.StatusInternalServerError, err)
 	}
 	if err := cmd.Start(); err != nil {
-		log.Fatal(err)
+		log.Println(err)
+		return echo.NewHTTPError(http.StatusInternalServerError, err)
 	}
 
 	// TODO: cmd.Wait() ?
 
-	contentType := "mp4"
+	contentType := "video/mp4"
 	//contentType := "video/x-flv"
 	//contentType := "video/MP2T"
 
@@ -624,6 +672,7 @@ func main() {
 	e.GET("/g", FullPreviewPhotoHandler)
 	e.GET("/f", FetchHandler)
 	e.GET("/v", StreamVideoHandler)
+	e.GET("/vp", VideoThumbnailHandler)
 	e.Logger.Fatal(e.Start(":1323"))
 
 }
