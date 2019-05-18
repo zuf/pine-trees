@@ -4,7 +4,7 @@
 <head>
     <meta charset="utf-8">
     <meta http-equiv="x-ua-compatible" content="ie=edge">
-    <title></title>
+    <title>Pine Trees</title>
     <meta name="description" content="">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 
@@ -70,8 +70,10 @@
             <div class="element photo">
                 {{if .SupportedFormat}}
                     {{/* RAW */}}
-                    <a href="/g?s={{.Src}}" class="jsp"><img src="/t?s={{.Src}}"
+                    <a href="/g?s={{.Src}}" class="jsp"><img class="lazy"
+                                                             src="/t?s={{.Src}}"
                                                              title="{{.Name}}"
+                                                             data-src="/p?s={{.Src}}"
                                                              data-caption="{{.Name}}"
                                                              data-bp="/g?s={{.Src}}"/></a>
                     <p class="title"><a href="/f?s={{.Src}}">{{.Name}}</a></p>
@@ -85,7 +87,9 @@
                         <p class="title"><a href="/f?s={{.Src}}">{{.Name}}</a></p>
                     {{else}}
                         {{/* JPEG / PNG / GIF / SVG / etc */}}
-                        <a href="/f?s={{.Src}}" class="jsp"><img src="/t?s={{.Src}}"
+                        <a href="/f?s={{.Src}}" class="jsp"><img class="lazy"
+                                                                 src="/t?s={{.Src}}"
+                                                                 data-src="/p?s={{.Src}}"
                                                                  title="{{.Name}}"
                                                                  data-caption="{{.Name}}"
                                                                  data-bp="/f?s={{.Src}}"/></a>
@@ -136,6 +140,7 @@
 
 <script src="/js/BigPicture.min.js"></script>
 <script src="/js/infinite-scroll.pkgd.js"></script>
+<script src="/js/yall.min.js"></script>
 <script src="/js/app.js"></script>
 
 </body>

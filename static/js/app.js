@@ -52,6 +52,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
     setPreviewBoxForElements(document.querySelectorAll('a.jsp'));
 
+    yall({observeChanges: true});
+
     var conf = document.querySelector('#conf');
     if (parseInt(conf.dataset.maxpage) > 1) {
 
@@ -134,6 +136,8 @@ document.addEventListener('DOMContentLoaded', function () {
             for (var i = 0; i < items.length; i++) {
                 setPreviewBoxForElements(items[i].querySelectorAll('a.jsp'));
             }
+
+            // yall();
         });
 
         infScroll.on('error', function (error, path) {

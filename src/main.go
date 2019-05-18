@@ -400,6 +400,7 @@ func ThumbnailPhotoHandler(c echo.Context) error {
 
 	if err != nil {
 		// TODO if preview not found make one on server and save to cache
+		// TOTO do not add preview for lazy loadin on front-end if it already sent as thumbnail
 		return PreviewPhotoHandler(c)
 	}
 
