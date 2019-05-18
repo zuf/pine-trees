@@ -96,9 +96,11 @@ WORKDIR /app
 COPY ./static /app/static
 COPY ./public /app/public
 COPY ./bin/play-to-stdout.sh /app/bin/play-to-stdout.sh
+COPY ./bin/thumbnail-from-video.sh /app/bin/thumbnail-from-video.sh
 COPY --from=builder /app/bin/pine-trees /app/bin/pine-trees
 RUN chmod a+x /app/bin/pine-trees
 RUN chmod a+x /app/bin/play-to-stdout.sh
+RUN chmod a+x /app/bin/thumbnail-from-video.sh
 
 ENV GALLERY_PATH /photos
 VOLUME /photos
