@@ -70,7 +70,7 @@
             <div class="element photo">
                 {{if .SupportedFormat}}
                     {{/* RAW */}}
-                    <a href="/g?s={{.Src}}" class="jsp"><img src="/p?s={{.Src}}"
+                    <a href="/g?s={{.Src}}" class="jsp"><img src="/t?s={{.Src}}"
                                                              title="{{.Name}}"
                                                              data-caption="{{.Name}}"
                                                              data-bp="/g?s={{.Src}}"/></a>
@@ -85,7 +85,7 @@
                         <p class="title"><a href="/f?s={{.Src}}">{{.Name}}</a></p>
                     {{else}}
                         {{/* JPEG / PNG / GIF / SVG / etc */}}
-                        <a href="/f?s={{.Src}}" class="jsp"><img src="/f?s={{.Src}}"
+                        <a href="/f?s={{.Src}}" class="jsp"><img src="/t?s={{.Src}}"
                                                                  title="{{.Name}}"
                                                                  data-caption="{{.Name}}"
                                                                  data-bp="/f?s={{.Src}}"/></a>

@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"github.com/zuf/pine-trees/src/go_preview_extractor"
 	"html/template"
 	"io"
 	"log"
@@ -38,7 +39,8 @@ import (
 
 // TODO: remove global var
 var t time.Time
-var thumbnailsCache *ccache.Cache
+var thumbnailCache *ccache.Cache
+var previewCache *ccache.Cache
 var filesListCache *ccache.Cache
 
 func printStats(count int, startedAt time.Time) {
@@ -330,7 +332,8 @@ func Index(c echo.Context) error {
 
 func process(decodedImageBuffer []byte, flip int) ([]byte, error) {
 	//if flip == 0 {
-	previewBuffer, err := bimg2.NewImage(decodedImageBuffer).Resize(300, 200)
+	// TODO sane preview size from settings, keep aspect ratio
+	previewBuffer, err := bimg2.NewImage(decodedImageBuffer).Resize(2*300, 2*200)
 	if err != nil {
 		log.Printf("ERROR: %s", err)
 	}
@@ -373,6 +376,38 @@ func process(decodedImageBuffer []byte, flip int) ([]byte, error) {
 	//}
 }
 
+func ThumbnailPhotoHandler(c echo.Context) error {
+	filePath := fullPath(c.QueryParam("s"))
+
+	err := writeCacheHeaders(c, filePath)
+	if err != nil {
+		c.Logger().Errorf("Can't write cache headers: %s", err)
+	}
+
+	item, err := thumbnailCache.Fetch(filePath, time.Hour*8, func() (interface{}, error) {
+		thumbnailBytes, err := go_preview_extractor.JPEGPreviewFromExif(filePath)
+		if err != nil {
+			return nil, err
+		}
+
+		// TODO less bytes copy
+		tmp := make([]byte, len(thumbnailBytes))
+		copy(tmp, thumbnailBytes)
+		return tmp, nil
+
+		return tmp, nil
+	})
+
+	if err != nil {
+		// TODO if preview not found make one on server and save to cache
+		return PreviewPhotoHandler(c)
+	}
+
+	data := item.Value().([]byte)
+
+	return c.Blob(http.StatusOK, "image/jpeg", data)
+}
+
 func PreviewPhotoHandler(c echo.Context) error {
 	filePath := fullPath(c.QueryParam("s"))
 
@@ -381,18 +416,45 @@ func PreviewPhotoHandler(c echo.Context) error {
 		c.Logger().Errorf("Can't write cache headers: %s", err)
 	}
 
-	item, err := thumbnailsCache.Fetch(filePath, time.Hour*8, func() (interface{}, error) {
+	item, err := previewCache.Fetch(filePath, time.Hour*8, func() (interface{}, error) {
 		rawProcessor := raw.NewRawProcessor()
 		defer rawProcessor.Close()
 		data, err := rawProcessor.ExtractPreview(filePath, process)
 		if err != nil {
+
+			switch filepath.Ext(strings.ToLower(strings.TrimSpace(filePath))) {
+			case ".png":
+				fallthrough
+			case ".gif":
+				fallthrough
+			case ".jpg", ".jpeg", ".jpe":
+				// TODO: add other image formats
+				buffer, err := bimg2.Read(filePath)
+				if err != nil {
+					return nil, err
+				}
+				// TODO move thumbnail size to config, keep aspect ratio
+				previewBuffer, err := bimg2.NewImage(buffer).Resize(2*300, 2*200)
+				if err != nil {
+					log.Printf("ERROR: %s", err)
+					return nil, err
+				}
+
+				return previewBuffer, err
+			}
+
+			if filepath.Ext(strings.TrimSpace(filePath)) == ".vm" {
+
+			}
+
 			return nil, err
 		}
 
 		return data, nil
 	})
 	if err != nil {
-		return FetchHandler(c)
+		//return FetchHandler(c)
+		return c.File("./static/img/loading-error.jpg")
 	}
 
 	data := item.Value().([]byte)
@@ -529,7 +591,8 @@ func FullPreviewPhotoHandler(c echo.Context) error {
 
 func main() {
 	// TODO: move magick numbers to default consts / env vars / config
-	thumbnailsCache = ccache.New(ccache.Configure().MaxSize(10000).ItemsToPrune(500).GetsPerPromote(1))
+	previewCache = ccache.New(ccache.Configure().MaxSize(10000).ItemsToPrune(500).GetsPerPromote(1))
+	thumbnailCache = ccache.New(ccache.Configure().MaxSize(10000).ItemsToPrune(500).GetsPerPromote(1))
 	filesListCache = ccache.New(ccache.Configure().MaxSize(1000).ItemsToPrune(50).GetsPerPromote(1))
 
 	// TODO: add another extensions
@@ -556,6 +619,7 @@ func main() {
 	e.GET("/", Index)
 	e.GET("/d", Index)
 	e.GET("/p", PreviewPhotoHandler)
+	e.GET("/t", ThumbnailPhotoHandler)
 	e.GET("/g", FullPreviewPhotoHandler)
 	e.GET("/f", FetchHandler)
 	e.GET("/v", StreamVideoHandler)
