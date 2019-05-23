@@ -6,7 +6,6 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
-	"github.com/zuf/pine-trees/src/go_preview_extractor"
 	"html/template"
 	"io"
 	"log"
@@ -15,10 +14,15 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
+
+	"github.com/zuf/pine-trees/src/go_preview_extractor"
 
 	bimg2 "gopkg.in/h2non/bimg.v1"
 
@@ -42,6 +46,13 @@ var t time.Time
 var thumbnailCache *ccache.Cache
 var previewCache *ccache.Cache
 var filesListCache *ccache.Cache
+
+var maxWorkers int32
+var curWorkers int32
+var mxPreview sync.Mutex
+var mxThumb sync.Mutex
+
+var thumbnailExctractor *go_preview_extractor.WorkerPool
 
 func printStats(count int, startedAt time.Time) {
 	if time.Since(t) > 5*time.Second {
@@ -380,6 +391,22 @@ func process(decodedImageBuffer []byte, flip int) ([]byte, error) {
 	//}
 }
 
+func lockWorker() {
+	for {
+		// TODO ugly sync code, replace for workers with readers and writers
+		if curWorkers >= maxWorkers {
+			time.Sleep(10 * time.Microsecond)
+		} else {
+			atomic.AddInt32(&curWorkers, 1)
+			return
+		}
+	}
+}
+
+func releaseWorker() {
+	atomic.AddInt32(&curWorkers, -1)
+}
+
 func ThumbnailPhotoHandler(c echo.Context) error {
 	filePath := fullPath(c.QueryParam("s"))
 
@@ -388,29 +415,41 @@ func ThumbnailPhotoHandler(c echo.Context) error {
 		c.Logger().Errorf("Can't write cache headers: %s", err)
 	}
 
-	item, err := thumbnailCache.Fetch(filePath, time.Hour*8, func() (interface{}, error) {
-		thumbnailBytes, err := go_preview_extractor.JPEGPreviewFromExif(filePath)
-		if err != nil {
-			return nil, err
-		}
+	//item, err := thumbnailCache.Fetch(filePath, time.Hour*8, func() (interface{}, error) {
+	//	thumbnailBytes, err := go_preview_extractor.JPEGPreviewFromExif(filePath)
+	//	if err != nil {
+	//		return nil, err
+	//	}
+	//
+	//	// TODO less bytes copy
+	//	tmp := make([]byte, len(thumbnailBytes))
+	//	copy(tmp, thumbnailBytes)
+	//	return tmp, nil
+	//})
+	//
+	//if err != nil {
+	//	// TODO if preview not found make one on server and save to cache
+	//	// TOTO do not add preview for lazy loadin on front-end if it already sent as thumbnail
+	//	return PreviewPhotoHandler(c)
+	//}
+	//
+	//data := item.Value().([]byte)
 
-		// TODO less bytes copy
-		tmp := make([]byte, len(thumbnailBytes))
-		copy(tmp, thumbnailBytes)
-		return tmp, nil
+	r := thumbnailExctractor.ProcessFile(c.Request().Context(), filePath, false)
 
-		return tmp, nil
-	})
+	return c.Stream(http.StatusOK, "image/jpeg", r)
 
-	if err != nil {
-		// TODO if preview not found make one on server and save to cache
-		// TOTO do not add preview for lazy loadin on front-end if it already sent as thumbnail
-		return PreviewPhotoHandler(c)
-	}
-
-	data := item.Value().([]byte)
-
-	return c.Blob(http.StatusOK, "image/jpeg", data)
+	//thumbnailBytes, err := go_preview_extractor.JPEGPreviewFromExif(filePath)
+	//
+	//if err != nil {
+	//	return echo.NewHTTPError(http.StatusFailedDependency, "Can't read exif from file")
+	//}
+	//
+	//// TODO less bytes copy
+	//data := make([]byte, len(thumbnailBytes))
+	//copy(data, thumbnailBytes)
+	//
+	//return c.Blob(http.StatusOK, "image/jpeg", data)
 }
 
 func PreviewPhotoHandler(c echo.Context) error {
@@ -421,50 +460,93 @@ func PreviewPhotoHandler(c echo.Context) error {
 		c.Logger().Errorf("Can't write cache headers: %s", err)
 	}
 
-	item, err := previewCache.Fetch(filePath, time.Hour*8, func() (interface{}, error) {
-		rawProcessor := raw.NewRawProcessor()
-		defer rawProcessor.Close()
-		data, err := rawProcessor.ExtractPreview(filePath, process)
-		if err != nil {
+	//item, err := previewCache.Fetch(filePath, time.Hour*8, func() (interface{}, error) {
+	//	rawProcessor := raw.NewRawProcessor()
+	//	defer rawProcessor.Close()
+	//	data, err := rawProcessor.ExtractPreview(filePath, process)
+	//	if err != nil {
+	//
+	//		switch filepath.Ext(strings.ToLower(strings.TrimSpace(filePath))) {
+	//		case ".png":
+	//			fallthrough
+	//		case ".gif":
+	//			fallthrough
+	//		case ".jpg", ".jpeg", ".jpe":
+	//			// TODO: add other image formats
+	//			buffer, err := bimg2.Read(filePath)
+	//			if err != nil {
+	//				return nil, err
+	//			}
+	//			// TODO move thumbnail size to config, keep aspect ratio
+	//			previewBuffer, err := bimg2.NewImage(buffer).Resize(2*300, 2*200)
+	//			if err != nil {
+	//				log.Printf("ERROR: %s", err)
+	//				return nil, err
+	//			}
+	//
+	//			return previewBuffer, err
+	//		}
+	//
+	//		if filepath.Ext(strings.TrimSpace(filePath)) == ".vm" {
+	//
+	//		}
+	//
+	//		return nil, err
+	//	}
+	//
+	//	return data, nil
+	//})
 
-			switch filepath.Ext(strings.ToLower(strings.TrimSpace(filePath))) {
-			case ".png":
-				fallthrough
-			case ".gif":
-				fallthrough
-			case ".jpg", ".jpeg", ".jpe":
-				// TODO: add other image formats
-				buffer, err := bimg2.Read(filePath)
-				if err != nil {
-					return nil, err
-				}
-				// TODO move thumbnail size to config, keep aspect ratio
-				previewBuffer, err := bimg2.NewImage(buffer).Resize(2*300, 2*200)
-				if err != nil {
-					log.Printf("ERROR: %s", err)
-					return nil, err
-				}
+	// ------------------------------------------------------------
 
-				return previewBuffer, err
-			}
+	//rawProcessor := raw.NewRawProcessor()
+	//defer rawProcessor.Close()
+	//mxPreview.Lock()
+	//data, err := rawProcessor.ExtractPreview(filePath, process)
+	//mxPreview.Unlock()
+	//if err != nil {
+	//
+	//	switch filepath.Ext(strings.ToLower(strings.TrimSpace(filePath))) {
+	//	case ".png":
+	//		fallthrough
+	//	case ".gif":
+	//		fallthrough
+	//	case ".jpg", ".jpeg", ".jpe":
+	//		// TODO: add other image formats
+	//		buffer, err := bimg2.Read(filePath)
+	//		if err != nil {
+	//			return echo.NewHTTPError(http.StatusFailedDependency, "Can't make preview for file")
+	//		}
+	//		// TODO move thumbnail size to config, keep aspect ratio
+	//		previewBuffer, err := bimg2.NewImage(buffer).Resize(2*300, 2*200)
+	//		if err != nil {
+	//			log.Printf("ERROR: %s", err)
+	//			return echo.NewHTTPError(http.StatusFailedDependency, "Can't make preview for file")
+	//		}
+	//
+	//		return c.Blob(http.StatusOK, "image/jpeg", previewBuffer)
+	//	}
+	//
+	//	//return nil, err
+	//
+	//}
+	//
+	//return c.Blob(http.StatusOK, "image/jpeg", data)
 
-			if filepath.Ext(strings.TrimSpace(filePath)) == ".vm" {
+	// ----------------------------------------------------
 
-			}
+	//if err != nil {
+	//	//return FetchHandler(c)
+	//	return c.File("./static/img/loading-error.jpg")
+	//}
 
-			return nil, err
-		}
+	//data := item.Value().([]byte)
 
-		return data, nil
-	})
-	if err != nil {
-		//return FetchHandler(c)
-		return c.File("./static/img/loading-error.jpg")
-	}
+	//return c.Blob(http.StatusOK, "image/jpeg", data)
 
-	data := item.Value().([]byte)
+	r := thumbnailExctractor.ProcessFile(c.Request().Context(), filePath, true)
 
-	return c.Blob(http.StatusOK, "image/jpeg", data)
+	return c.Stream(http.StatusOK, "image/jpeg", r)
 }
 
 func processFull(decodedImageBuffer []byte, flip int) ([]byte, error) {
@@ -639,9 +721,13 @@ func FullPreviewPhotoHandler(c echo.Context) error {
 }
 
 func main() {
+
+	maxWorkers = 4
+	curWorkers = 0
+
 	// TODO: move magick numbers to default consts / env vars / config
-	previewCache = ccache.New(ccache.Configure().MaxSize(10000).ItemsToPrune(500).GetsPerPromote(1))
-	thumbnailCache = ccache.New(ccache.Configure().MaxSize(10000).ItemsToPrune(500).GetsPerPromote(1))
+	previewCache = ccache.New(ccache.Configure().MaxSize(1000).ItemsToPrune(100).GetsPerPromote(1))
+	thumbnailCache = ccache.New(ccache.Configure().MaxSize(1000).ItemsToPrune(100).GetsPerPromote(1))
 	filesListCache = ccache.New(ccache.Configure().MaxSize(1000).ItemsToPrune(50).GetsPerPromote(1))
 
 	// TODO: add another extensions
@@ -656,6 +742,8 @@ func main() {
 	tpl := &Template{
 		templates: template.Must(template.ParseGlob("public/views/*.html")),
 	}
+
+	thumbnailExctractor = go_preview_extractor.NewWorkersPool(runtime.NumCPU())
 
 	e := echo.New()
 	e.Static("/css", "static/css")

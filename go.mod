@@ -13,8 +13,12 @@ require (
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasttemplate v0.0.0-20170224212429-dcecefd839c4 // indirect
 	github.com/wsxiaoys/terminal v0.0.0-20160513160801-0940f3fc43a0 // indirect
+	github.com/xiam/exif v0.0.0-20160817012543-33e82e3db72f
+	github.com/xor-gate/goexif2 v1.1.0
 	golang.org/x/crypto v0.0.0-20190103213133-ff983b9c42bc // indirect
 	golang.org/x/sys v0.0.0-20190116161447-11f53e031339 // indirect
 	gopkg.in/h2non/bimg.v1 v1.0.19
 	gopkg.in/karlseguin/expect.v1 v1.0.1 // indirect
 )
+
+replace github.com/xor-gate/goexif2 => /home/zuf/projects/goexif2

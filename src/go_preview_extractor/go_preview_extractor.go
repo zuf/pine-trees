@@ -1,14 +1,18 @@
 package go_preview_extractor
 
 import (
-	"github.com/rwcarlsen/goexif/mknote"
+	"context"
+	"io"
+	"io/ioutil"
 	"log"
 	"os"
+	"runtime"
+	"sync"
 
-	"github.com/rwcarlsen/goexif/exif"
+	"github.com/xor-gate/goexif2/exif"
 )
 
-func JPEGPreviewFromExif(fname string) ([]byte, error) {
+func JPEGPreviewFromExif(fname string, fullPreview bool) ([]byte, error) {
 
 	f, err := os.Open(fname)
 	defer f.Close() // TODO: should verify errors on file close
@@ -20,7 +24,7 @@ func JPEGPreviewFromExif(fname string) ([]byte, error) {
 
 	// Optionally register camera makenote data parsing - currently Nikon and
 	// Canon are supported.
-	exif.RegisterParsers(mknote.All...)
+	//exif.RegisterParsers(mknote.All...)
 
 	x, err := exif.Decode(f)
 	if err != nil {
@@ -42,8 +46,144 @@ func JPEGPreviewFromExif(fname string) ([]byte, error) {
 	//lat, long, _ := x.LatLong()
 	//fmt.Println("lat, long: ", lat, ", ", long)
 
-	bytesBuf, err := x.JpegThumbnail()
+	var bytesBuf []byte
 
-	return bytesBuf, err
+	if fullPreview {
+		bytesBuf, err = x.PreviewImage()
 
+		if err != nil {
+			// maybe it jpeg?
+			log.Println(err)
+
+			bytesBuf, err = ioutil.ReadFile(fname)
+			if err != nil {
+				log.Println(err)
+				return nil, err
+			}
+
+			return bytesBuf, nil
+		}
+	} else {
+		bytesBuf, err = x.JpegThumbnail()
+	}
+	if err != nil {
+		log.Println(err)
+		return nil, err
+	}
+
+	return bytesBuf, nil
+
+}
+
+type workerTask struct {
+	file        string
+	fullPreview bool
+
+	ctx context.Context
+
+	writer *io.PipeWriter
+	reader *io.PipeReader
+}
+
+func (w *workerTask) GetReader() io.Reader {
+	return w.reader
+}
+
+func NewWorkerTask(ctx context.Context, file string, fullPreview bool) *workerTask {
+	r, w := io.Pipe()
+
+	return &workerTask{
+		file:        file,
+		writer:      w,
+		reader:      r,
+		fullPreview: fullPreview,
+		ctx:         ctx,
+	}
+}
+
+type WorkerPool struct {
+	inputs chan *workerTask
+	wg     *sync.WaitGroup
+}
+
+func NewWorkersPool(n int) *WorkerPool {
+	jobsChanSize := n * 2
+
+	if jobsChanSize < 2 {
+		jobsChanSize = 2
+	}
+
+	inputChan := make(chan *workerTask, jobsChanSize)
+	wg := sync.WaitGroup{}
+
+	workersPool := WorkerPool{
+		inputs: inputChan,
+		wg:     &wg,
+	}
+
+	workersCount := n
+
+	if n <= 0 {
+		workersCount = runtime.NumCPU()
+	}
+
+	for w := 0; w < workersCount; w++ {
+		wg.Add(1)
+		go worker(inputChan, &wg)
+	}
+
+	return &workersPool
+}
+
+func (w *WorkerPool) Close() {
+	close(w.inputs)
+	w.wg.Wait()
+}
+
+func (w *WorkerPool) ProcessFile(ctx context.Context, file string, fullPreview bool) io.Reader {
+	task := NewWorkerTask(ctx, file, fullPreview)
+	w.inputs <- task
+
+	return task.GetReader()
+}
+
+func worker(inputs <-chan *workerTask, wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	for task := range inputs {
+		//s := fmt.Sprintf("%s - done!", task.file)
+		select {
+		case <-task.ctx.Done():
+			log.Printf("request cancelled because: %+v\n", task.ctx.Err())
+
+			err := task.writer.Close()
+			if err != nil {
+				log.Printf("ERROR: can't close writer after processing file \"%s\": %s", task.file, err)
+			}
+			continue
+		default:
+
+			buf, err := JPEGPreviewFromExif(task.file, task.fullPreview)
+			if err != nil {
+				log.Printf("ERROR: can't extract thumbnail from \"%s\": %s", task.file, err)
+
+				// TODO: DRY
+				err = task.writer.Close()
+				if err != nil {
+					log.Printf("ERROR: can't close writer after processing file \"%s\": %s", task.file, err)
+				}
+				continue
+			}
+
+			_, err = task.writer.Write(buf)
+			if err != nil {
+				log.Printf("ERROR: can't write to writer after processing file \"%s\": %s", task.file, err)
+			}
+
+			err = task.writer.Close()
+			if err != nil {
+				log.Printf("ERROR: can't close writer after processing file \"%s\": %s", task.file, err)
+			}
+		}
+	}
 }
