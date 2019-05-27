@@ -52,10 +52,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
     setPreviewBoxForElements(document.querySelectorAll('a.jsp'));
 
-    yall({observeChanges: true, idleLoadTimeout: 3000});
+    // yall({observeChanges: true, idleLoadTimeout: 3000});
 
     var conf = document.querySelector('#conf');
-    if (parseInt(conf.dataset.maxpage) > 1) {
+    if (false && parseInt(conf.dataset.maxpage) > 1) {
 
         var infScroll = new InfiniteScroll('.photos', {
             // defaults listed

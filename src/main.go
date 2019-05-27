@@ -2,13 +2,16 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"crypto/md5"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"html/template"
+	"image/jpeg"
 	"io"
 	"log"
+	"math"
 	"mime"
 	"net/http"
 	"os"
@@ -21,6 +24,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/corona10/goimagehash"
 
 	"github.com/zuf/pine-trees/src/go_preview_extractor"
 
@@ -238,6 +243,114 @@ func photosToShots(photos []Photo, minSplitTime time.Duration) []Shot {
 	return shoots
 }
 
+func recombineShots(shots []Shot, minDistanceToCombine int) []Shot {
+	log.Printf("DEBUG minDistanceToCombine = %d", minDistanceToCombine)
+	var newShots []*Shot
+
+	if len(shots) <= 1 {
+		return shots // TODO make duplicate?
+	}
+
+	var prevShot *Shot
+	var lastAppendedShot *Shot
+	for n, _ := range shots {
+		curShot := &shots[n]
+		if prevShot == nil {
+			prevShot = curShot
+		} else {
+			photo1 := &prevShot.Photos[len(prevShot.Photos)-1]
+			photo2 := &curShot.Photos[0]
+			d := distanceBetweenImages(photo1, photo2)
+			if d < minDistanceToCombine {
+				log.Printf("Combine shots: %s + %s [distance = %d]", photo1.RealPath, photo2.RealPath, d)
+
+				var newShot *Shot
+
+				if lastAppendedShot == nil {
+					var combinedPhotos []Photo
+					for _, p := range prevShot.Photos {
+						combinedPhotos = append(combinedPhotos, p)
+					}
+					for _, p := range curShot.Photos {
+						combinedPhotos = append(combinedPhotos, p)
+					}
+					newShot = &Shot{
+						StartedAt:  prevShot.StartedAt,
+						FinishedAt: curShot.FinishedAt,
+						Photos:     combinedPhotos,
+					}
+				} else {
+					newShot = lastAppendedShot
+
+					for _, p := range curShot.Photos {
+						newShot.Photos = append(newShot.Photos, p)
+					}
+				}
+
+				newShots = append(newShots, newShot)
+				lastAppendedShot = newShot
+				prevShot = newShot
+			} else {
+				newShots = append(newShots, prevShot)
+				//newShots = append(newShots, *curShot)
+				lastAppendedShot = nil
+				prevShot = curShot
+			}
+		}
+	}
+
+	if lastAppendedShot == nil && prevShot != nil {
+		newShots = append(newShots, prevShot)
+	}
+
+	var result []Shot
+
+	for _, s := range newShots {
+		result = append(result, *s)
+	}
+
+	return result
+}
+
+func imageHash(fileName string) *goimagehash.ImageHash {
+	jpegBuf, err := go_preview_extractor.JPEGPreviewFromExif(fileName, false)
+
+	if err != nil {
+		log.Println("Can't get image hash for #{photo1}", err)
+	}
+
+	img, err := jpeg.Decode(bytes.NewReader(jpegBuf))
+	if err != nil {
+		log.Println("Can't get image hash for #{photo1}", err)
+	}
+
+	hash, err := goimagehash.PerceptionHash(img)
+	if err != nil {
+		log.Println("Can't get image hash for #{photo1}", err)
+	}
+
+	return hash
+}
+
+func distanceBetweenImages(photo1 *Photo, photo2 *Photo) int {
+	hash1 := imageHash(photo1.RealPath)
+	hash2 := imageHash(photo2.RealPath)
+	if hash1 == nil || hash2 == nil {
+		return math.MaxInt32
+	}
+
+	distance, err := hash1.Distance(hash2)
+	if err != nil {
+		log.Printf("Can't get distance between images: %s", err)
+		return math.MaxInt32
+	}
+
+	log.Printf("Distance between %s and %s = %d", photo1.RealPath, photo2.RealPath, distance)
+
+	return distance
+
+}
+
 func IndexHandler(c echo.Context) error {
 	// TODO tune minSplitTime
 	ms, _ := strconv.Atoi(c.QueryParam("ms"))
@@ -245,6 +358,11 @@ func IndexHandler(c echo.Context) error {
 		ms = 2000
 	}
 	minSplitTime := time.Duration(ms) * time.Millisecond
+
+	minDistanceToCombine, _ := strconv.Atoi(c.QueryParam("distance"))
+	if minDistanceToCombine <= 0 {
+		minDistanceToCombine = 10
+	}
 
 	path := c.QueryParam("s")
 	page := 1
@@ -418,6 +536,7 @@ func IndexHandler(c echo.Context) error {
 		}
 
 		data.Shots = photosToShots(data.Photos, minSplitTime)
+		data.Shots = recombineShots(data.Shots, minDistanceToCombine)
 
 		return data, nil
 
