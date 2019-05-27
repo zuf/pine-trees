@@ -8,9 +8,55 @@ import (
 	"os"
 	"runtime"
 	"sync"
+	"time"
 
 	"github.com/xor-gate/goexif2/exif"
 )
+
+func ShotTime(fname string) (time.Time, error) {
+	var tm time.Time
+
+	f, err := os.Open(fname)
+	defer f.Close() // TODO: should verify errors on file close
+
+	if err != nil {
+		log.Println(err)
+		return tm, err
+	}
+
+	// Optionally register camera makenote data parsing - currently Nikon and
+	// Canon are supported.
+	//exif.RegisterParsers(mknote.All...)
+
+	x, err := exif.Decode(f)
+	if err != nil {
+		log.Println(err)
+		return tm, err
+	}
+
+	//camModel, _ := x.Get(exif.Model) // normally, don't ignore errors!
+	//fmt.Println(camModel.StringVal())
+	//
+
+	//focal, _ := x.Get(exif.FocalLength)
+	//numer, denom, _ := focal.Rat2(0) // retrieve first (only) rat. value
+	//fmt.Printf("%v/%v", numer, denom)
+	//
+	//Two convenience functions exist for date/time taken and GPS coords:
+	// TODO: look for timezone offset, GPS time, etc.
+	tm, err = x.DateTime()
+	if err != nil {
+		log.Println(err)
+		return tm, err
+	}
+
+	return tm, nil
+	//fmt.Println("Taken: ", tm)
+
+	//lat, long, _ := x.LatLong()
+	//fmt.Println("lat, long: ", lat, ", ", long)
+
+}
 
 func JPEGPreviewFromExif(fname string, fullPreview bool) ([]byte, error) {
 

@@ -54,50 +54,56 @@
 </p>
 
 <section id="photos" class="photos">
-    {{range .Photos}}
-        {{if .Directory}}
-            <div class="element dir">
-                <a href="/d?s={{.Src}}">
-                    <div class="dir-folder">
-                        <div class="folder">
-                            <div class="icon"></div>
-                        </div>
+    {{range .Shots}}
+        <div class="shot element">
+            {{range .Photos}}
+                {{if .Directory}}
+                    <div class="dir">
+                        <a href="/d?s={{.Src}}">
+                            <div class="dir-folder">
+                                <div class="folder">
+                                    <div class="icon"></div>
+                                </div>
+                            </div>
+                        </a>
+                        <p><a href="/d?s={{.Src}}&amp;p=1">[ {{.Name}} ]</a></p>
                     </div>
-                </a>
-                <p><a href="/d?s={{.Src}}&amp;p=1">[ {{.Name}} ]</a></p>
-            </div>
-        {{else}}
-            <div class="element photo">
-                {{if .SupportedFormat}}
-                    {{/* RAW */}}
-                    <a href="/g?s={{.Src}}" class="jsp"><img class="lazy"
-                                                             src="/t?s={{.Src}}"
-                                                             title="{{.Name}}"
-                                                             data-src="/p?s={{.Src}}"
-                                                             data-caption="{{.Name}}"
-                                                             data-bp="/g?s={{.Src}}"/></a>
-                    <p class="title"><a href="/f?s={{.Src}}">{{.Name}}</a></p>
                 {{else}}
-                    {{if .IsVideo}}
-                        {{/* MP4 / WEBM / OGG */}}
-                        <a href="/v?s={{.Src}}.mp4" class="jsp video"><img src="/vp?s={{.VideoPreview}}"
-                                                                           title="{{.Name}}"
-                                                                           data-caption="{{.Name}}"
-                                                                           data-bp="/v?s={{.Src}}.mp4"/></a>
-                        <p class="title"><a href="/f?s={{.Src}}">{{.Name}}</a></p>
-                    {{else}}
-                        {{/* JPEG / PNG / GIF / SVG / etc */}}
-                        <a href="/f?s={{.Src}}" class="jsp"><img class="lazy"
-                                                                 src="/t?s={{.Src}}"
-                                                                 data-src="/p?s={{.Src}}"
-                                                                 title="{{.Name}}"
-                                                                 data-caption="{{.Name}}"
-                                                                 data-bp="/f?s={{.Src}}"/></a>
-                        <p class="title"><a href="/f?s={{.Src}}">{{.Name}}</a></p>
-                    {{end}}
+                    <div class="photo">
+                        {{if .SupportedFormat}}
+                            {{/* RAW */}}
+                            <a href="/g?s={{.Src}}" class="jsp"><img class="lazy"
+                                                                     src="/t?s={{.Src}}"
+                                                                     title="{{.Name}}"
+                                                                     data-src="/p?s={{.Src}}"
+                                                                     data-caption="{{.Name}}"
+                                                                     data-bp="/g?s={{.Src}}"/></a>
+                            <p class="title"><a href="/f?s={{.Src}}">{{.Name}}</a></p>
+                        {{else}}
+                            {{if .IsVideo}}
+                                {{/* MP4 / WEBM / OGG */}}
+                                <a href="/v?s={{.Src}}.mp4" class="jsp video"><img src="/vp?s={{.VideoPreview}}"
+                                                                                   title="{{.Name}}"
+                                                                                   data-caption="{{.Name}}"
+                                                                                   data-bp="/v?s={{.Src}}.mp4"/></a>
+                                <p class="title"><a href="/f?s={{.Src}}">{{.Name}}</a></p>
+                            {{else}}
+                                {{/* JPEG / PNG / GIF / SVG / etc */}}
+                                <a href="/f?s={{.Src}}" class="jsp"><img class="lazy"
+                                                                         src="/t?s={{.Src}}"
+                                                                         data-src="/p?s={{.Src}}"
+                                                                         title="{{.Name}}"
+                                                                         data-caption="{{.Name}}"
+                                                                         data-bp="/f?s={{.Src}}"/></a>
+                                <p class="title"><a href="/f?s={{.Src}}">{{.Name}}</a></p>
+                            {{end}}
+                        {{end}}
+                    </div>
                 {{end}}
-            </div>
-        {{end}}
+            {{end}}
+            <div class="shot-start">{{.StartedAt}}</div>
+            <div class="shot-end">{{.FinishedAt}}</div>
+        </div>
     {{end}}
 </section>
 

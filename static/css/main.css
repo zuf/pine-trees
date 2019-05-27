@@ -386,3 +386,14 @@ header a {
     text-align: center;
     display: none;
 }
+
+.shot {
+    background: #999999;
+    border: #cccccc;
+    margin: .5rem;
+}
+
+.shot .shot-start,
+.shot .shot-end {
+    font-size: 50%;
+}

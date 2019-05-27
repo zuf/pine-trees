@@ -1,6 +1,7 @@
 module github.com/zuf/pine-trees
 
 require (
+	github.com/corona10/goimagehash v1.0.1 // indirect
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible // indirect
 	github.com/karlseguin/ccache v2.0.2+incompatible
 	github.com/karlseguin/expect v1.0.1 // indirect
@@ -8,6 +9,7 @@ require (
 	github.com/labstack/gommon v0.2.8 // indirect
 	github.com/mattn/go-colorable v0.0.9 // indirect
 	github.com/mattn/go-isatty v0.0.4 // indirect
+	github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646 // indirect
 	github.com/rwcarlsen/goexif v0.0.0-20190107194617-b1fd11e07dc5
 	github.com/stretchr/testify v1.3.0 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect

@@ -118,7 +118,14 @@ func (t *Template) Render(w io.Writer, name string, data interface{}, c echo.Con
 	return t.templates.ExecuteTemplate(w, name, data)
 }
 
+type Shot struct {
+	StartedAt  time.Time
+	FinishedAt time.Time
+	Photos     []Photo
+}
+
 type Photo struct {
+	RealPath        string
 	Src             string
 	Name            string
 	Directory       bool
@@ -126,6 +133,7 @@ type Photo struct {
 	SendToBrowser   bool
 	IsVideo         bool
 	VideoPreview    string
+	ShootAt         time.Time
 }
 
 type PageNumber struct {
@@ -139,6 +147,7 @@ type BreadCrumb struct {
 }
 
 type PhotosPageData struct {
+	Shots       []Shot
 	Photos      []Photo
 	Page        int
 	MaxPage     int
@@ -166,7 +175,77 @@ func fullPath(path string) string {
 	return dir
 }
 
-func Index(c echo.Context) error {
+func photosToShots(photos []Photo, minSplitTime time.Duration) []Shot {
+	for n, _ := range photos {
+		if photos[n].ShootAt.IsZero() {
+			t, err := go_preview_extractor.ShotTime(photos[n].RealPath)
+			if err != nil {
+				log.Println(err)
+			} else {
+				photos[n].ShootAt = t
+			}
+		}
+	}
+
+	sort.SliceStable(photos, func(i, j int) bool {
+		return photos[i].ShootAt.Unix() < photos[j].ShootAt.Unix()
+	})
+
+	var shoots []Shot
+	var lastShoot *Shot
+
+	for _, photo := range photos {
+		if photo.ShootAt.IsZero() {
+			var photosSlice []Photo
+			photosSlice = append(photosSlice, photo)
+			shoots = append(shoots, Shot{
+				Photos:     photosSlice,
+				StartedAt:  photo.ShootAt,
+				FinishedAt: photo.ShootAt,
+			})
+		} else {
+			if lastShoot == nil {
+				lastShoot = &Shot{
+					StartedAt:  photo.ShootAt,
+					FinishedAt: photo.ShootAt,
+					Photos:     []Photo{photo},
+				}
+			} else {
+				timeDistance := photo.ShootAt.Sub(lastShoot.FinishedAt)
+				if timeDistance < minSplitTime {
+					log.Printf("%s - %s", lastShoot.FinishedAt, photo.ShootAt)
+					log.Printf("duration: %f s", timeDistance)
+					// it a 'burst' (continued shot)
+					lastShoot.Photos = append(lastShoot.Photos, photo)
+					lastShoot.FinishedAt = photo.ShootAt
+				} else {
+					shoots = append(shoots, *lastShoot)
+					lastShoot = &Shot{
+						StartedAt:  photo.ShootAt,
+						FinishedAt: photo.ShootAt,
+						Photos:     []Photo{photo},
+					}
+				}
+
+			}
+		}
+	}
+
+	if lastShoot != nil {
+		shoots = append(shoots, *lastShoot)
+	}
+
+	return shoots
+}
+
+func IndexHandler(c echo.Context) error {
+	// TODO tune minSplitTime
+	ms, _ := strconv.Atoi(c.QueryParam("ms"))
+	if ms <= 0 {
+		ms = 2000
+	}
+	minSplitTime := time.Duration(ms) * time.Millisecond
+
 	path := c.QueryParam("s")
 	page := 1
 	page, _ = strconv.Atoi(c.QueryParam("p"))
@@ -174,6 +253,7 @@ func Index(c echo.Context) error {
 	h := md5.New()
 	io.WriteString(h, path)
 	io.WriteString(h, strconv.Itoa(page))
+	io.WriteString(h, strconv.Itoa(ms))
 	dirName := fullPath(path)
 
 	fi, err := os.Stat(dirName)
@@ -195,7 +275,7 @@ func Index(c echo.Context) error {
 	etagKey := hex.EncodeToString(h.Sum(nil))
 	c.Response().Header().Set("ETag", etagKey)
 
-	item, err := filesListCache.Fetch(etagKey, time.Second*60, func() (interface{}, error) {
+	item, err := filesListCache.Fetch(etagKey, time.Second*1, func() (interface{}, error) {
 		data := PhotosPageData{Photos: []Photo{}}
 
 		// TODO: use reader
@@ -212,7 +292,7 @@ func Index(c echo.Context) error {
 			return nil, err
 		}
 
-		sort.Slice(files, func(i, j int) bool {
+		sort.SliceStable(files, func(i, j int) bool {
 			if files[i].IsDir() {
 				if files[j].IsDir() {
 					return files[i].Name() < files[j].Name()
@@ -282,9 +362,10 @@ func Index(c echo.Context) error {
 
 		for _, f := range files[from:to] {
 			fullPath := filepath.Join(path, f.Name())
+			realPath := filepath.Join(dirName, f.Name())
 
 			if f.IsDir() {
-				data.Photos = append(data.Photos, Photo{Src: fullPath, Name: f.Name(), Directory: true, IsVideo: false})
+				data.Photos = append(data.Photos, Photo{RealPath: realPath, Src: fullPath, Name: f.Name(), Directory: true, IsVideo: false})
 			} else {
 				if f.Mode().IsRegular() {
 					ext := strings.ToUpper(filepath.Ext(f.Name()))
@@ -293,7 +374,7 @@ func Index(c echo.Context) error {
 					case ".NRW":
 						fallthrough
 					case ".CR2":
-						data.Photos = append(data.Photos, Photo{Src: fullPath, Name: f.Name(), SupportedFormat: true, SendToBrowser: false, IsVideo: false})
+						data.Photos = append(data.Photos, Photo{RealPath: realPath, Src: fullPath, Name: f.Name(), SupportedFormat: true, SendToBrowser: false, IsVideo: false})
 
 					case ".MOV", ".MP4", ".MKV", ".AVI", ".M4V":
 						ext := filepath.Ext(fullPath)
@@ -303,7 +384,7 @@ func Index(c echo.Context) error {
 							thmPath = fullPath
 						}
 
-						data.Photos = append(data.Photos, Photo{Src: fullPath, Name: f.Name(),
+						data.Photos = append(data.Photos, Photo{RealPath: realPath, Src: fullPath, Name: f.Name(),
 							SupportedFormat: false,
 							SendToBrowser:   false,
 							IsVideo:         true,
@@ -325,16 +406,18 @@ func Index(c echo.Context) error {
 					case "SVG":
 						fallthrough
 					case "SVGZ":
-						data.Photos = append(data.Photos, Photo{Src: fullPath, Name: f.Name(), SupportedFormat: false, SendToBrowser: true, IsVideo: false})
+						data.Photos = append(data.Photos, Photo{RealPath: realPath, Src: fullPath, Name: f.Name(), SupportedFormat: false, SendToBrowser: true, IsVideo: false})
 					default:
 						// TODO: try to get preview through libraw, oterwise fallback to default (send file as is)
-						data.Photos = append(data.Photos, Photo{Src: fullPath, Name: f.Name(), SupportedFormat: true, SendToBrowser: false, IsVideo: false})
+						data.Photos = append(data.Photos, Photo{RealPath: realPath, Src: fullPath, Name: f.Name(), SupportedFormat: true, SendToBrowser: false, IsVideo: false})
 
 						//data.Photos = append(data.Photos, Photo{Src: fullPath, Name: f.Name(), SupportedFormat: false, SendToBrowser: true, IsVideo: false})
 					}
 				}
 			}
 		}
+
+		data.Shots = photosToShots(data.Photos, minSplitTime)
 
 		return data, nil
 
@@ -753,8 +836,8 @@ func main() {
 	e.Renderer = tpl
 	e.HideBanner = true
 
-	e.GET("/", Index)
-	e.GET("/d", Index)
+	e.GET("/", IndexHandler)
+	e.GET("/d", IndexHandler)
 	e.GET("/p", PreviewPhotoHandler)
 	e.GET("/t", ThumbnailPhotoHandler)
 	e.GET("/g", FullPreviewPhotoHandler)
