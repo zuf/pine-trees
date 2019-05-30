@@ -48,14 +48,41 @@ function setPreviewBoxForElements(imageLinks) {
     // }
 }
 
+var getParents = function (e) {
+    var parents = [];
+    for (; e && e !== document; e = e.parentNode) {
+        parents.push(e);
+    }
+    return parents;
+
+};
+
+
 document.addEventListener('DOMContentLoaded', function () {
+
+    document.body.addEventListener('click', function (evt) {
+        console.log(evt.target.classList);
+
+        if (evt.target.classList.contains('shot')) {
+            evt.target.classList.toggle('open-shot');
+
+        } else {
+            for (let el of getParents(evt.target)) {
+                if (el.classList.contains('shot')) {
+                    console.log('Toggle');
+                    el.classList.toggle('open-shot');
+                    return true;
+                }
+            }
+        }
+    }, false);
 
     setPreviewBoxForElements(document.querySelectorAll('a.jsp'));
 
-    // yall({observeChanges: true, idleLoadTimeout: 3000});
+    yall({observeChanges: true, idleLoadTimeout: 3000});
 
     var conf = document.querySelector('#conf');
-    if (false && parseInt(conf.dataset.maxpage) > 1) {
+    if (parseInt(conf.dataset.maxpage) > 1) {
 
         var infScroll = new InfiniteScroll('.photos', {
             // defaults listed

@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"container/list"
 	"crypto/md5"
 	"encoding/binary"
 	"encoding/hex"
@@ -243,70 +244,135 @@ func photosToShots(photos []Photo, minSplitTime time.Duration) []Shot {
 	return shoots
 }
 
+func canCombineShots(shot1 *Shot, shot2 *Shot, minDistanceToCombine int) bool {
+
+	stopDistance := float64(minDistanceToCombine)*0.25 + 1
+
+	for _, photo1 := range shot1.Photos { //[len(prevShot.Photos)-1]
+		for _, photo2 := range shot2.Photos {
+			d := distanceBetweenImages(&photo1, &photo2)
+
+			if d <= minDistanceToCombine {
+				log.Printf("Combine shots: %s + %s [distance = %d]", photo1.RealPath, photo2.RealPath, d)
+				return true
+			}
+
+			if float64(d) >= stopDistance {
+				// too large distance do not look further
+				return false
+			}
+
+		}
+	}
+
+	return false
+}
+
 func recombineShots(shots []Shot, minDistanceToCombine int) []Shot {
 	log.Printf("DEBUG minDistanceToCombine = %d", minDistanceToCombine)
-	var newShots []*Shot
+	//var newShots []*Shot
 
 	if len(shots) <= 1 {
 		return shots // TODO make duplicate?
 	}
 
-	var prevShot *Shot
-	var lastAppendedShot *Shot
-	for n, _ := range shots {
-		curShot := &shots[n]
-		if prevShot == nil {
-			prevShot = curShot
-		} else {
-			photo1 := &prevShot.Photos[len(prevShot.Photos)-1]
-			photo2 := &curShot.Photos[0]
-			d := distanceBetweenImages(photo1, photo2)
-			if d < minDistanceToCombine {
-				log.Printf("Combine shots: %s + %s [distance = %d]", photo1.RealPath, photo2.RealPath, d)
+	//var prevShot *Shot
+	//var lastAppendedShot *Shot
 
-				var newShot *Shot
+	shotsList := list.New()
 
-				if lastAppendedShot == nil {
-					var combinedPhotos []Photo
-					for _, p := range prevShot.Photos {
-						combinedPhotos = append(combinedPhotos, p)
-					}
-					for _, p := range curShot.Photos {
-						combinedPhotos = append(combinedPhotos, p)
-					}
-					newShot = &Shot{
-						StartedAt:  prevShot.StartedAt,
-						FinishedAt: curShot.FinishedAt,
-						Photos:     combinedPhotos,
-					}
-				} else {
-					newShot = lastAppendedShot
+	// duplicate shots
+	for _, shot := range shots {
+		//log.Printf("%s", shot.Photos[0].RealPath)
 
-					for _, p := range curShot.Photos {
-						newShot.Photos = append(newShot.Photos, p)
-					}
-				}
+		var photos []Photo
 
-				newShots = append(newShots, newShot)
-				lastAppendedShot = newShot
-				prevShot = newShot
-			} else {
-				newShots = append(newShots, prevShot)
-				//newShots = append(newShots, *curShot)
-				lastAppendedShot = nil
-				prevShot = curShot
-			}
+		for _, photo := range shot.Photos {
+			photos = append(photos, photo)
 		}
+
+		shotsList.PushBack(&Shot{
+			FinishedAt: shot.FinishedAt,
+			StartedAt:  shot.StartedAt,
+			Photos:     photos,
+		})
 	}
 
-	if lastAppendedShot == nil && prevShot != nil {
-		newShots = append(newShots, prevShot)
+	for curElement := shotsList.Front(); curElement != nil; curElement = curElement.Next() {
+		curShot := curElement.Value.(*Shot)
+
+		if curElement.Prev() != nil {
+			prevShot := curElement.Prev().Value.(*Shot)
+			if canCombineShots(prevShot, curShot, minDistanceToCombine) {
+				prevShot.FinishedAt = curShot.FinishedAt
+				for _, p := range curShot.Photos {
+					prevShot.Photos = append(prevShot.Photos, p)
+				}
+				prev := curElement.Prev()
+				shotsList.Remove(curElement)
+				curElement = prev
+			} else {
+
+			}
+
+		}
+
+		//if prevShot == nil {
+		//	prevShot = curShot
+		//} else {
+		//	photo1 := &prevShot.Photos[len(prevShot.Photos)-1]
+		//	photo2 := &curShot.Photos[0]
+		//	d := distanceBetweenImages(photo1, photo2)
+		//	if d < minDistanceToCombine {
+		//		log.Printf("Combine shots: %s + %s [distance = %d]", photo1.RealPath, photo2.RealPath, d)
+		//
+		//		var newShot *Shot
+		//
+		//		if lastAppendedShot == nil {
+		//			var combinedPhotos []Photo
+		//			for _, p := range prevShot.Photos {
+		//				combinedPhotos = append(combinedPhotos, p)
+		//			}
+		//			for _, p := range curShot.Photos {
+		//				combinedPhotos = append(combinedPhotos, p)
+		//			}
+		//			newShot = &Shot{
+		//				StartedAt:  prevShot.StartedAt,
+		//				FinishedAt: curShot.FinishedAt,
+		//				Photos:     combinedPhotos,
+		//			}
+		//		} else {
+		//			newShot = lastAppendedShot
+		//
+		//			for _, p := range curShot.Photos {
+		//				newShot.Photos = append(newShot.Photos, p)
+		//			}
+		//		}
+		//
+		//		newShots = append(newShots, newShot)
+		//		lastAppendedShot = newShot
+		//		prevShot = newShot
+		//	} else {
+		//		newShots = append(newShots, prevShot)
+		//		//newShots = append(newShots, *curShot)
+		//		lastAppendedShot = nil
+		//		prevShot = curShot
+		//	}
+		//}
 	}
+
+	//if lastAppendedShot == nil && prevShot != nil {
+	//	newShots = append(newShots, prevShot)
+	//}
 
 	var result []Shot
 
-	for _, s := range newShots {
-		result = append(result, *s)
+	//for _, s := range newShots {
+	//	result = append(result, *s)
+	//}
+
+	for curElement := shotsList.Front(); curElement != nil; curElement = curElement.Next() {
+		result = append(result, *curElement.Value.(*Shot))
 	}
 
 	return result
@@ -324,7 +390,7 @@ func imageHash(fileName string) *goimagehash.ImageHash {
 		log.Println("Can't get image hash for #{photo1}", err)
 	}
 
-	hash, err := goimagehash.PerceptionHash(img)
+	hash, err := goimagehash.AverageHash(img)
 	if err != nil {
 		log.Println("Can't get image hash for #{photo1}", err)
 	}
@@ -335,6 +401,7 @@ func imageHash(fileName string) *goimagehash.ImageHash {
 func distanceBetweenImages(photo1 *Photo, photo2 *Photo) int {
 	hash1 := imageHash(photo1.RealPath)
 	hash2 := imageHash(photo2.RealPath)
+
 	if hash1 == nil || hash2 == nil {
 		return math.MaxInt32
 	}
@@ -345,7 +412,7 @@ func distanceBetweenImages(photo1 *Photo, photo2 *Photo) int {
 		return math.MaxInt32
 	}
 
-	log.Printf("Distance between %s and %s = %d", photo1.RealPath, photo2.RealPath, distance)
+	//log.Printf("Distance between %s and %s = %d", photo1.RealPath, photo2.RealPath, distance)
 
 	return distance
 
@@ -361,7 +428,7 @@ func IndexHandler(c echo.Context) error {
 
 	minDistanceToCombine, _ := strconv.Atoi(c.QueryParam("distance"))
 	if minDistanceToCombine <= 0 {
-		minDistanceToCombine = 10
+		minDistanceToCombine = 7
 	}
 
 	path := c.QueryParam("s")

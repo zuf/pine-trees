@@ -98,21 +98,6 @@ textarea {
    ========================================================================== */
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 /* ==========================================================================
    Helper classes
    ========================================================================== */
@@ -204,9 +189,9 @@ textarea {
 }
 
 @media print,
-       (-webkit-min-device-pixel-ratio: 1.25),
-       (min-resolution: 1.25dppx),
-       (min-resolution: 120dpi) {
+(-webkit-min-device-pixel-ratio: 1.25),
+(min-resolution: 1.25dppx),
+(min-resolution: 120dpi) {
     /* Style adjustments for high resolution devices */
 }
 
@@ -244,7 +229,6 @@ textarea {
      * Don't show links that are fragment identifiers,
      * or use the `javascript:` pseudo protocol
      */
-
     a[href^="#"]:after,
     a[href^="javascript:"]:after {
         content: "";
@@ -253,6 +237,7 @@ textarea {
     pre {
         white-space: pre-wrap !important;
     }
+
     pre,
     blockquote {
         border: 1px solid #999;
@@ -263,7 +248,6 @@ textarea {
      * Printing Tables:
      * http://css-discuss.incutio.com/wiki/Printing_Tables
      */
-
     thead {
         display: table-header-group;
     }
@@ -285,8 +269,6 @@ textarea {
         page-break-after: avoid;
     }
 }
-
-
 
 
 /* ********************************* */
@@ -332,8 +314,7 @@ header a {
 }
 
 .photo img,
-.dir-folder
-{
+.dir-folder {
     float: left;
     box-sizing: border-box;
     padding: .2rem;
@@ -391,6 +372,20 @@ header a {
     background: #999999;
     border: #cccccc;
     margin: .5rem;
+
+    display: flex;
+    flex-wrap: nowrap;
+
+}
+
+.shot .photo {
+
+}
+
+.open-shot {
+
+    flex-wrap: wrap;
+
 }
 
 .shot .shot-start,
