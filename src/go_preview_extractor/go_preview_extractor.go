@@ -6,7 +6,9 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"path"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -187,7 +189,13 @@ func (w *WorkerPool) Close() {
 }
 
 func (w *WorkerPool) ProcessFile(ctx context.Context, file string, fullPreview bool) io.Reader {
-	task := NewWorkerTask(ctx, file, fullPreview)
+	fileToProcess := file
+
+	if strings.ToLower(path.Ext(file)) == ".xmp" {
+		fileToProcess = file[:len(file)-4]
+	}
+
+	task := NewWorkerTask(ctx, fileToProcess, fullPreview)
 	w.inputs <- task
 
 	return task.GetReader()

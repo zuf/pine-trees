@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -812,6 +813,10 @@ func PreviewPhotoHandler(c echo.Context) error {
 	//data := item.Value().([]byte)
 
 	//return c.Blob(http.StatusOK, "image/jpeg", data)
+
+	if strings.ToLower(path.Ext(filePath)) == ".xmp" {
+		filePath = filePath[:len(filePath)-4]
+	}
 
 	r := thumbnailExctractor.ProcessFile(c.Request().Context(), filePath, true)
 
