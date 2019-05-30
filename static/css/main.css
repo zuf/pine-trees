@@ -378,14 +378,36 @@ header a {
 
 }
 
-.shot .photo {
+.shot .photo:first-child {
+    margin-left: 150px;
+}
 
+.shot .photo {
+    margin-left: -150px;
+    /*box-shadow: 5px 10px #000;*/
+}
+
+.shot .photo img {
+    box-shadow: -5px 5px 5px 0px #000;
+}
+
+.shot {
+    border-top: solid 1rem #2ee7ff;
+    cursor: pointer;
 }
 
 .open-shot {
-
+    border-top: solid 1rem #00d7d7;
     flex-wrap: wrap;
+}
 
+
+.open-shot .photo:first-child {
+    margin-left: 1rem !important;
+}
+
+.open-shot .photo {
+    margin-left: 1rem !important;
 }
 
 .shot .shot-start,

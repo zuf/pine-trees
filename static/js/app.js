@@ -69,8 +69,9 @@ document.addEventListener('DOMContentLoaded', function () {
         } else {
             for (let el of getParents(evt.target)) {
                 if (el.classList.contains('shot')) {
-                    console.log('Toggle');
-                    el.classList.toggle('open-shot');
+                    if (!el.classList.contains('photo') && el.type != 'img' ) {
+                        el.classList.toggle('open-shot');
+                    }
                     return true;
                 }
             }
